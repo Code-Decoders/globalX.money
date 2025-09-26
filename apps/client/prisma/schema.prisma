@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RecipientType {
+  INDIVIDUAL
+  BUSINESS
+}
+
+enum AccountType {
+  SAVINGS
+  CURRENT
+  NRE
+  NRO
+  OTHER
+}
+
+model Recipient {
+  id              String         @id @default(cuid())
+  walletAddress   String
+  type            RecipientType
+  firstName       String?        @db.VarChar(120)
+  lastName        String?        @db.VarChar(120)
+  businessName    String?        @db.VarChar(200)
+  email           String?        @db.VarChar(160)
+  phone           String?        @db.VarChar(60)
+  accountNumber   String         @db.VarChar(64)
+  ifsc            String         @db.VarChar(20)
+  bankName        String         @db.VarChar(160)
+  accountHolder   String         @db.VarChar(160)
+  branch          String?        @db.VarChar(160)
+  accountType     AccountType
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([walletAddress])
+}
