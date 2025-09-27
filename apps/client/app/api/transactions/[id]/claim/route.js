@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { executeGpsTransaction } from "@/app/api/gps/transactions/service";
 
 const markExpired = async (id) => {
   try {
@@ -11,7 +12,7 @@ const markExpired = async (id) => {
 };
 
 export async function POST(request, { params }) {
-  const { id } = params || {};
+  const { id } = await params || {};
   if (!id) {
     return NextResponse.json({ error: "Transaction id is required" }, { status: 400 });
   }
@@ -68,6 +69,18 @@ export async function POST(request, { params }) {
       });
     }
 
+
+    const result = await executeGpsTransaction({
+      recipientId: recipientId,
+      quoteId: transaction.quoteId,
+      fromAmount: transaction.fromAmount,
+      fromCurrency: transaction.fromCurrency,
+      toCurrency: transaction.toCurrency,
+      notes: transaction.notes,
+      purposeOfPayment: transaction.purpose,
+
+    });
+
     const updated = await prisma.transaction.update({
       where: { id },
       data: {
@@ -82,6 +95,9 @@ export async function POST(request, { params }) {
       message: "Funds claimed. We'll notify you when they're ready to release.",
     });
   } catch (error) {
+    if (error instanceof GpsTransactionError) {
+      return NextResponse.json({ error: error.message, details: error.details }, { status: error.status });
+    }
     console.error("Failed to process transaction claim", error);
     return NextResponse.json({ error: "Unable to update transaction" }, { status: 500 });
   }
