@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useChainId, useAccount, useDisconnect, useSwitchChain, useReadContract, useBalance } from "wagmi";
@@ -12,12 +13,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { SEPOLIA_CHAIN_ID, CENTRAL_WALLET_ADDRESS, PYUSD_DECIMALS, PYUSD_TOKEN_ADDRESS } from "@/lib/constants";
 const DEFAULT_SEND_AMOUNT = "1.15";
 const REFRESH_INTERVAL_MS = 60_000;
 
 const accountTypes = ["Savings", "Current", "NRE", "NRO", "Other"];
+
+const fundingAssets = [
+  { code: "PYUSD", label: "PYUSD", logo: "https://assets-currency.kucoin.com/650aa3b042b36f0001377c3b_logo%20%282%29.png", available: true },
+  { code: "USD", label: "USD", logo: "https://flagcdn.com/us.svg", available: false },
+  { code: "AED", label: "AED", logo: "https://flagcdn.com/ae.svg", available: false },
+  { code: "EUR", label: "EUR", logo: "https://flagcdn.com/eu.svg", available: false },
+  { code: "USDT", label: "USDT", logo: "https://cryptologos.cc/logos/tether-usdt-logo.svg?v=033", available: false },
+];
 
 const emptyRecipientForm = {
   type: "individual",
@@ -582,17 +592,30 @@ export default function QuotePage() {
     }
   }, [recipientForm, recipientStep, updateRecipientForm]);
 
+  const [selectedAsset, setSelectedAsset] = useState(fundingAssets[0].code);
   const [sendAmount, setSendAmount] = useState(DEFAULT_SEND_AMOUNT);
   const [receiveAmount, setReceiveAmount] = useState("");
   const [amountSource, setAmountSource] = useState("from");
   const [refreshCountdown, setRefreshCountdown] = useState(REFRESH_INTERVAL_MS / 1000);
+
+  const selectedAssetMeta = useMemo(
+    () => fundingAssets.find((asset) => asset.code === selectedAsset) ?? fundingAssets[0],
+    [selectedAsset],
+  );
+  const selectedAssetLabel = selectedAssetMeta?.label ?? selectedAsset;
+  const selectedAssetLogo = selectedAssetMeta?.logo ?? fundingAssets[0].logo;
+
+  const effectiveQuoteCurrency = useMemo(
+    () => (selectedAsset === "PYUSD" ? "USD" : selectedAsset),
+    [selectedAsset],
+  );
 
   const amountValue = amountSource === "from" ? sendAmount : receiveAmount;
   const parsedAmount = Number.parseFloat(amountValue || "0");
   const canFetchQuote = !isWrongChain && Number.isFinite(parsedAmount) && parsedAmount > 0;
 
   const quoteQuery = useQuery({
-    queryKey: ["gps-quote", amountSource, amountValue],
+    queryKey: ["gps-quote", amountSource, amountValue, effectiveQuoteCurrency],
     queryFn: async () => {
       const trimmedAmount = amountValue?.trim();
       if (!trimmedAmount) {
@@ -600,7 +623,7 @@ export default function QuotePage() {
       }
 
       const payload = {
-        fromCurrency: "USD",
+        fromCurrency: effectiveQuoteCurrency,
         toCurrency: "INR",
         ...(amountSource === "from" ? { fromAmount: trimmedAmount } : { toAmount: trimmedAmount }),
       };
@@ -637,7 +660,7 @@ export default function QuotePage() {
 
   const rateValue = quoteData?.rate ? Number.parseFloat(String(quoteData.rate)) : null;
   const midMarketRateValue = quoteData?.midMarketRate ? Number.parseFloat(String(quoteData.midMarketRate)) : null;
-  const rateLabel = rateValue ? `1 USD = ₹${rateValue.toFixed(4)}` : "Rate unavailable";
+  const rateLabel = rateValue ? `1 ${selectedAsset} = ₹${rateValue.toFixed(4)}` : "Rate unavailable";
   const midMarketLabel = midMarketRateValue ? `₹${midMarketRateValue.toFixed(4)}` : "—";
   const rateDifferenceValue = rateValue && midMarketRateValue ? ((rateValue - midMarketRateValue) / midMarketRateValue) * 100 : null;
   const rateDifferenceLabel = typeof rateDifferenceValue === "number" ? `${rateDifferenceValue >= 0 ? "+" : ""}${rateDifferenceValue.toFixed(2)}%` : "—";
@@ -687,6 +710,7 @@ export default function QuotePage() {
       senderWallet: address,
       recipientId: String(selectedRecipient.id),
       fromAmount: amountNumeric.toString(),
+      currencyFrom: selectedAsset,
       notes: paymentDescription.trim(),
       purposeOfPayment: paymentPurpose.trim(),
       quoteId: quoteData?.id ?? null,
@@ -729,6 +753,7 @@ export default function QuotePage() {
     }
   }, [
     address,
+    selectedAsset,
     clearClaimCopyTimeout,
     paymentDescription,
     paymentPurpose,
@@ -866,7 +891,7 @@ export default function QuotePage() {
 
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Recipient</p>
@@ -967,7 +992,7 @@ export default function QuotePage() {
   if (stage === "recipientForm") {
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
             <div className="flex items-center gap-3">
               <Button
@@ -1033,7 +1058,7 @@ export default function QuotePage() {
   if (stage === "payment") {
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Payment details</p>
@@ -1105,7 +1130,7 @@ export default function QuotePage() {
   if (stage === "confirm") {
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Review</p>
@@ -1120,7 +1145,9 @@ export default function QuotePage() {
                 <div className="rounded-[var(--radius-lg)] border bg-muted px-4 py-3">
                   <div className="flex items-center justify-between text-xs">
                     <span>You send</span>
-                    <span className="font-semibold text-card-foreground">${formattedSendAmount} PYUSD</span>
+                    <span className="font-semibold text-card-foreground">
+                      {formattedSendAmount} {selectedAsset}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span>They receive</span>
@@ -1203,7 +1230,7 @@ export default function QuotePage() {
 
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
 
             {transactionFeedback && transactionFeedbackType === "success" ? (
@@ -1268,8 +1295,34 @@ export default function QuotePage() {
                       setReceiveAmount("");
                     }
                   }}
-                  className="border-0 bg-transparent px-0 text-xl font-semibold text-card-foreground shadow-none focus-visible:border-0 focus-visible:ring-0"
+                  className="flex-1 border-0 bg-transparent px-0 text-xl font-semibold text-card-foreground shadow-none focus-visible:border-0 focus-visible:ring-0"
                 />
+                <Select
+                  value={selectedAsset}
+                  onValueChange={(value) => {
+                    setSelectedAsset(value);
+                    setAmountSource("from");
+                    setReceiveAmount("");
+                    if (transactionFeedback) {
+                      setTransactionFeedback("");
+                      setTransactionFeedbackType("");
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-10 w-32 rounded-full border border-secondary/40 bg-background text-xs font-semibold text-card-foreground shadow-none focus:ring-0">
+                    <SelectValue aria-label={selectedAssetMeta.label} placeholder="Asset" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fundingAssets.map((asset) => (
+                      <SelectItem key={asset.code} value={asset.code} disabled={!asset.available} className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
+                          <Image src={asset.logo} alt={asset.code} width={16} height={16} className="h-4 w-4" />
+                          <span>{asset.code}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button
                   type="button"
                   variant="ghost"
@@ -1280,9 +1333,6 @@ export default function QuotePage() {
                 >
                   Max
                 </Button>
-                <div className="flex flex-col items-center gap-1 rounded-[var(--radius-lg)] border border-dashed border-secondary/50 px-3 py-1 text-[11px] font-semibold text-secondary-foreground">
-                  <span>PYUSD</span>
-                </div>
               </div>
               <div className="space-y-1 text-[11px] text-muted-foreground">
                 {isConnected ? (
@@ -1291,7 +1341,7 @@ export default function QuotePage() {
                   ) : (
                     <>
                       <p>
-                        Available balance: <span className="font-semibold text-card-foreground">${walletBalance.toFixed(2)}</span>
+                        Settlement balance: <span className="font-semibold text-card-foreground">{"$"+walletBalance.toFixed(2)}</span>
                       </p>
                     </>
                   )
@@ -1352,12 +1402,8 @@ export default function QuotePage() {
               </div>
               <ul className="space-y-1 pt-1 text-[10px]">
                 <li className="flex items-center gap-2">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-                  Compliance checks run in real time
-                </li>
-                <li className="flex items-center gap-2">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-secondary-foreground/40" />
-                  Rate holds for 30 minutes
+                  <span>Rate holds for 3 minutes · 0 fees · Payout &lt; 10s</span>
                 </li>
               </ul>
               {quoteErrorMessage ? (
@@ -1421,7 +1467,7 @@ export default function QuotePage() {
               }}
             </ConnectButton.Custom>
             <p className="text-center text-[11px] text-muted-foreground">
-              Regulated transfers by PY Remit Labs LLC.
+              Regulated transfers by GlobalX.money.
             </p>
           </CardFooter>
         </Card>

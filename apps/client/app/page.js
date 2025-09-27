@@ -8,17 +8,17 @@ const steps = [
   {
     title: "1. Get a quote",
     href: "/app",
-    description: "Lock in live FX and fees before you send.",
+    description: "Lock FX and fees upfront with automatic risk screening.",
   },
   {
-    title: "2. Add funds",
+    title: "2. Verify & fund",
     href: "/app/funds",
-    description: "Top up PYUSD on Sepolia using the treasury contract.",
+    description: "Review compliance checks and top up your settlement balance.",
   },
   {
-    title: "3. Send remittance",
+    title: "3. Trigger payout",
     href: "/app",
-    description: "Finalize recipient details and launch the transfer.",
+    description: "Submit the remittance for instant delivery to the recipient bank.",
   },
 ];
 
@@ -27,13 +27,13 @@ export default function HomeLanding() {
     <section className="flex w-full justify-end lg:flex-1">
       <Card className="w-full shadow-lg sm:max-w-md md:max-w-md">
         <CardHeader className="space-y-2">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">PY Remit</p>
-          <CardTitle className="text-2xl">Move PYUSD globally in three steps</CardTitle>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">GlobalX.money</p>
+          <CardTitle className="text-2xl">Move money globally in three steps</CardTitle>
         </CardHeader>
 
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Follow the flow to quote, fund, and send money to India with complete transparency.
+            Follow our compliance-ready flow to quote, verify, and deliver cross-border payouts in seconds.
           </p>
           <Separator className="bg-border" />
           <div className="space-y-3">
@@ -55,7 +55,7 @@ export default function HomeLanding() {
             <Link href="/app">Start a quote</Link>
           </Button>
           <p className="text-center text-[11px] text-muted-foreground">
-            Need Sepolia PYUSD? Add funds in step two before sending.
+            Licensed and audit-ready infrastructure powers instant INR settlement.
           </p>
         </CardFooter>
       </Card>

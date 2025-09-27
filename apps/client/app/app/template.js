@@ -6,12 +6,12 @@ export default function Template({ children }) {
 
     const valueProps = [
         {
-            title: "0 hidden fees",
-            description: "Every quote shows your service fee before you send.",
+            title: "Regulatory-first",
+            description: "Every transfer is screened, logged, and audit-ready by design.",
         },
         {
-            title: "Guaranteed delivery",
-            description: "95% of transfers arrive within seconds in India.",
+            title: "Instant payouts",
+            description: "95% of INR deposits land within seconds after approval.",
         },
     ];
 
@@ -28,7 +28,7 @@ export default function Template({ children }) {
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
             <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-8">
-                <div className="text-lg font-semibold tracking-tight">PY Remit</div>
+                <div className="text-lg font-semibold tracking-tight">GlobalX.money</div>
                 <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
                     <a className="transition-colors hover:text-foreground" href="#">
                         Product
@@ -46,10 +46,10 @@ export default function Template({ children }) {
             <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-12 px-6 pb-16 lg:flex-row lg:items-center">
                 <section className="max-w-xl space-y-6 flex-1">
                     <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                        Send money to India in seconds with transparent pricing.
+                        Send money to India instantly with regulated infrastructure.
                     </h1>
                     <p className="text-lg text-muted-foreground">
-                        Top up your wallet with PYUSD and deliver local INR directly to bank accounts. Lock in live rates, see fees upfront, and move value globally without the friction.
+                        Automate compliant onboarding, lock FX and fees upfront, and orchestrate instant INR payouts across multiple funding assets without compromising on legal obligations.
                     </p>
                     <div className="grid gap-4 text-sm sm:grid-cols-2">
                         {valueProps.map((value) => (
@@ -77,7 +77,7 @@ export default function Template({ children }) {
 
             <footer className="mx-auto w-full max-w-6xl px-6 pb-10 text-xs text-muted-foreground">
                 <p>
-                    © {currentYear} PY Remit Labs LLC · Licensed money transmitter · Transfers powered by PYUSD.
+                    © {currentYear} GlobalX.money · Licensed money transmitter · Regulated cross-border payouts.
                 </p>
             </footer>
         </div>
