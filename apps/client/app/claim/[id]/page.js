@@ -133,6 +133,14 @@ export default function ClaimTransactionPage({ params }) {
             <h1 className="text-lg font-semibold">Review transfer details</h1>
           </div>
 
+          <div className="rounded-[var(--radius-lg)] border border-primary/20 bg-primary/5 p-4">
+            <p className="text-[11px] font-semibold uppercase text-primary">Keep your balance growing</p>
+            <h2 className="text-base font-semibold text-primary">Earn a 4% Annual Reward Rate while you hold</h2>
+            <p className="text-xs text-muted-foreground">
+              Funds on hold continue to earn rewards daily, and you can withdraw them whenever you are ready.
+            </p>
+          </div>
+
           <Separator className="bg-border" />
 
           <div className="space-y-4 text-sm text-muted-foreground">
@@ -183,30 +191,41 @@ export default function ClaimTransactionPage({ params }) {
         </CardContent>
 
         <CardFooter className="flex flex-col gap-3 px-6 pb-6">
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row-reverse justify-between w-full">
             <Button
-              variant="secondary"
               onClick={() => handleAction("hold")}
               disabled={holdDisabled}
-              className="w-full rounded-full"
+              className="w-full rounded-full sm:w-auto"
             >
-              {claiming ? "Processing…" : "Hold funds (earn 4% interest)"}
+              {claiming ? "Processing…" : "Keep earning 4% rewards"}
             </Button>
             <Button
+              variant="outline"
               onClick={() => handleAction("claim")}
               disabled={claimDisabled}
-              className="w-full rounded-full"
+              className="w-full rounded-full sm:w-auto"
             >
-              {claiming ? "Processing…" : isExpired ? "Request expired" : isPending ? "Claim funds" : isOnHold ? "On hold" : "Already claimed"}
+              {claiming
+                ? "Processing…"
+                : isExpired
+                  ? "Request expired"
+                  : isPending
+                    ? "Withdraw funds"
+                    : isOnHold
+                      ? "On hold"
+                      : "Already claimed"}
             </Button>
           </div>
           {transaction?.quoteId ? (
             <p className="text-center text-[11px] text-muted-foreground">Quote: {transaction.quoteId}</p>
           ) : null}
           {isPending ? (
-            <p className="text-center text-[11px] text-muted-foreground">
-              Holding funds keeps them safe and accrues 4% interest until you are ready to receive.
-            </p>
+            <div className="space-y-1 text-center">
+              <p className="text-[11px] font-semibold text-primary">Keep it parked, keep it growing.</p>
+              <p className="text-[11px] text-muted-foreground">
+                Holding your balance keeps rewards compounding at a 4% Annual Reward Rate until withdrawal.
+              </p>
+            </div>
           ) : null}
         </CardFooter>
       </Card>

@@ -44,6 +44,9 @@ export async function POST(request) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signature = generateSignature(bodyString, timestamp);
 
+  console.log("URL", GPS_BASE_URL);
+  console.log("X-API-Key", GPS_API_KEY);
+  console.log("Secret", GPS_API_SECRET);
   try {
     const response = await fetch(`${GPS_BASE_URL}/quote`, {
       method: "POST",

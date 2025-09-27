@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useChainId, useAccount, useDisconnect, useSwitchChain, useReadContract, useBalance } from "wagmi";
 import { formatUnits } from "viem";
-import { LogOut } from "lucide-react";
+import { Check, Copy, LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -44,6 +44,7 @@ export default function QuotePage() {
   const { switchChainAsync } = useSwitchChain();
   const switchAttemptedRef = useRef(false);
   const feedbackTimeoutRef = useRef(null);
+  const claimCopyTimeoutRef = useRef(null);
 
   const [recipients, setRecipients] = useState([]);
   const [recipientStatus, setRecipientStatus] = useState("idle");
@@ -119,6 +120,13 @@ export default function QuotePage() {
     }
   }, []);
 
+  const clearClaimCopyTimeout = useCallback(() => {
+    if (claimCopyTimeoutRef.current) {
+      window.clearTimeout(claimCopyTimeoutRef.current);
+      claimCopyTimeoutRef.current = null;
+    }
+  }, []);
+
   const resetRecipientFeedback = useCallback(() => {
     clearFeedbackTimeout();
     feedbackTimeoutRef.current = window.setTimeout(() => {
@@ -130,8 +138,9 @@ export default function QuotePage() {
   useEffect(() => {
     return () => {
       clearFeedbackTimeout();
+      clearClaimCopyTimeout();
     };
-  }, [clearFeedbackTimeout]);
+  }, [clearClaimCopyTimeout, clearFeedbackTimeout]);
 
   useEffect(() => {
     if (!selectedRecipient) {
@@ -350,13 +359,29 @@ export default function QuotePage() {
   const [transactionSubmitting, setTransactionSubmitting] = useState(false);
   const [transactionFeedback, setTransactionFeedback] = useState("");
   const [transactionFeedbackType, setTransactionFeedbackType] = useState("");
+  const [claimUrl, setClaimUrl] = useState("");
+  const [claimCopyStatus, setClaimCopyStatus] = useState("");
 
   useEffect(() => {
     if (stage !== "quote" && transactionFeedbackType === "success") {
       setTransactionFeedback("");
       setTransactionFeedbackType("");
+      setClaimUrl("");
+      setClaimCopyStatus("");
+      clearClaimCopyTimeout();
     }
-  }, [stage, transactionFeedbackType]);
+  }, [clearClaimCopyTimeout, stage, transactionFeedbackType]);
+
+  useEffect(() => {
+    if (claimUrl) {
+      return;
+    }
+    if (!claimCopyStatus) {
+      return;
+    }
+    setClaimCopyStatus("");
+    clearClaimCopyTimeout();
+  }, [claimCopyStatus, claimUrl, clearClaimCopyTimeout]);
 
   const resetFlow = useCallback(() => {
     setStage("quote");
@@ -365,6 +390,36 @@ export default function QuotePage() {
     setPaymentDescription("");
     setPaymentError("");
   }, []);
+
+  const handleCopyClaimUrl = useCallback(async () => {
+    if (!claimUrl) {
+      return;
+    }
+
+    const scheduleReset = (delay = 2000) => {
+      clearClaimCopyTimeout();
+      claimCopyTimeoutRef.current = window.setTimeout(() => {
+        setClaimCopyStatus("");
+        claimCopyTimeoutRef.current = null;
+      }, delay);
+    };
+
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      setClaimCopyStatus("unsupported");
+      scheduleReset(2500);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(claimUrl);
+      setClaimCopyStatus("copied");
+      scheduleReset();
+    } catch (copyError) {
+      console.error(copyError);
+      setClaimCopyStatus("failed");
+      scheduleReset(3000);
+    }
+  }, [claimUrl, clearClaimCopyTimeout]);
 
   const renderRecipientStepContent = useCallback(() => {
     switch (recipientStep) {
@@ -623,6 +678,9 @@ export default function QuotePage() {
     setPaymentError("");
     setTransactionFeedback("");
     setTransactionFeedbackType("");
+    setClaimUrl("");
+    setClaimCopyStatus("");
+    clearClaimCopyTimeout();
     setTransactionSubmitting(true);
 
     const payload = {
@@ -650,11 +708,12 @@ export default function QuotePage() {
         throw new Error(data?.error || "Failed to execute transaction");
       }
 
-      const claimMessage = data?.claimUrl
-        ? `Transfer request created. Share this link with your recipient: ${data.claimUrl}`
-        : "Transaction request created successfully.";
-
-      setTransactionFeedback(claimMessage);
+      if (data?.claimUrl) {
+        setClaimUrl(data.claimUrl);
+        setTransactionFeedback("Transfer request created");
+      } else {
+        setTransactionFeedback("Transaction request created successfully.");
+      }
       setTransactionFeedbackType("success");
       resetFlow();
     } catch (error) {
@@ -662,11 +721,15 @@ export default function QuotePage() {
       const message = error instanceof Error ? error.message : "Failed to execute transaction";
       setTransactionFeedback(message);
       setTransactionFeedbackType("error");
+      setClaimUrl("");
+      setClaimCopyStatus("");
+      clearClaimCopyTimeout();
     } finally {
       setTransactionSubmitting(false);
     }
   }, [
     address,
+    clearClaimCopyTimeout,
     paymentDescription,
     paymentPurpose,
     quoteData,
@@ -1144,9 +1207,42 @@ export default function QuotePage() {
           <CardContent className="space-y-6 px-6 pb-2">
 
             {transactionFeedback && transactionFeedbackType === "success" ? (
-              <div className="rounded-full bg-primary/10 px-4 py-2 text-center text-xs font-semibold text-primary">
-                {transactionFeedback}
-              </div>
+              claimUrl ? (
+                <div className="rounded-lg border border-primary/30 bg-primary/10 p-4">
+                  <div className="flex flex-col gap-3 text-left">
+                    <div>
+                      <p className="text-sm font-semibold text-primary">{transactionFeedback}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Share this link with your recipient so they can claim the funds.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-background px-3 py-2">
+                      <span className="flex-1 truncate text-xs font-medium text-card-foreground">{claimUrl}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1 rounded-full px-3 text-xs"
+                        onClick={handleCopyClaimUrl}
+                      >
+                        {claimCopyStatus === "copied" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        {claimCopyStatus === "copied" ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                    {claimCopyStatus === "failed" ? (
+                      <p className="text-xs text-destructive">Copy failed. Try again or copy manually.</p>
+                    ) : claimCopyStatus === "unsupported" ? (
+                      <p className="text-xs text-muted-foreground">Clipboard access unavailable. Copy the link manually.</p>
+                    ) : claimCopyStatus === "copied" ? (
+                      <p className="text-xs text-primary">Link copied to your clipboard.</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-full bg-primary/10 px-4 py-2 text-center text-xs font-semibold text-primary">
+                  {transactionFeedback}
+                </div>
+              )
             ) : null}
 
             <div className="space-y-2">
