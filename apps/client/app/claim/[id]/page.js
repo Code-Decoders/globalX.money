@@ -1,6 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getUniversalLink } from "@selfxyz/core";
+import { v4 as uuidv4 } from "uuid";
+import { SelfAppBuilder } from "@selfxyz/qrcode";
+import dynamic from "next/dynamic";
+const SelfQRcodeWrapper = dynamic(() => import("@selfxyz/qrcode").then(m => m.SelfQRcodeWrapper), { ssr: false });
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -25,6 +38,11 @@ export default function ClaimTransactionPage() {
   const [claiming, setClaiming] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [feedbackType, setFeedbackType] = useState("");
+  const [verified, setVerified] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [selfApp, setSelfApp] = useState(null);
+  const [universalLink, setUniversalLink] = useState("");
+  const [verifyOpen, setVerifyOpen] = useState(false);
 
   const fetchTransaction = useCallback(async () => {
     setLoading(true);
@@ -60,15 +78,72 @@ export default function ClaimTransactionPage() {
     if (!isPending) return true;
     if (claiming) return true;
     if (isExpired) return true;
+    if (!verified) return true;
     return false;
-  }, [claiming, isExpired, isPending]);
+  }, [claiming, isExpired, isPending, verified]);
 
   const holdDisabled = useMemo(() => {
     if (!isPending) return true;
     if (claiming) return true;
     if (isExpired) return true;
+    if (!verified) return true;
     return false;
-  }, [claiming, isExpired, isPending]);
+  }, [claiming, isExpired, isPending, verified]);
+
+  // Initialize Self App QR for recipient nationality verification
+  const initSelfApp = useCallback(() => {
+    try {
+      const app = new SelfAppBuilder({
+        version: 2,
+        appName: process.env.NEXT_PUBLIC_SELF_APP_NAME || "ProofOfHumanOApp",
+        scope: process.env.NEXT_PUBLIC_SELF_SCOPE || "self-codedecoders",
+        endpoint: (process.env.NEXT_PUBLIC_SELF_RECIPIENT_VERIFY_ENDPOINT || (process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/api/recipient-verification` : "https://ranaco.loca.lt/api/recipient-verification")),
+        userId: uuidv4(),
+        endpointType: "staging_https",
+        userIdType: "uuid",
+        userDefinedData: JSON.stringify({ transactionId: id }),
+        disclosures: {
+          nationality: true,
+        },
+      }).build();
+      setSelfApp(app);
+      setUniversalLink(getUniversalLink(app));
+      setVerifying(true);
+      setVerifyOpen(true);
+    } catch (err) {
+      console.error("Failed to init Self app", err);
+    }
+  }, [id]);
+
+  const handleVerifySuccess = useCallback(async () => {
+    // Close and mark verified; backend has already verified proof
+    setSelfApp(null);
+    setVerifying(false);
+    setVerifyOpen(false);
+    setVerified(true);
+    setFeedback("Identity verified");
+    setFeedbackType("success");
+    setTimeout(() => {
+      setFeedback("");
+      setFeedbackType("");
+    }, 2000);
+  }, []);
+
+  const handleVerifyError = useCallback((e) => {
+    console.error("Verification error", e);
+    setSelfApp(null);
+    setVerifying(false);
+    setVerifyOpen(false);
+  }, []);
+
+  const handleVerifyOpenChange = useCallback((open) => {
+    setVerifyOpen(open);
+    if (!open) {
+      setSelfApp(null);
+      setUniversalLink("");
+      setVerifying(false);
+    }
+  }, []);
 
   const handleAction = useCallback(
     async (action) => {
@@ -187,6 +262,54 @@ export default function ClaimTransactionPage() {
               <p className="rounded-full bg-destructive/10 px-3 py-1 text-center text-[11px] font-semibold text-destructive">
                 {error}
               </p>
+            ) : null}
+
+            {!verified ? (
+              <div className="space-y-3 rounded-[var(--radius-lg)] border bg-muted px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-card-foreground">Identity verification</span>
+                  <Dialog open={verifyOpen} onOpenChange={handleVerifyOpenChange}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" className="rounded-full" onClick={initSelfApp}>
+                        {verifying ? "Preparing…" : "Verify"}
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Verify with Self</DialogTitle>
+                        <DialogDescription>
+                          Scan this QR with the Self app to verify your nationality.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="flex flex-col items-center gap-4 py-2">
+                        {selfApp ? (
+                          <SelfQRcodeWrapper
+                            selfApp={selfApp}
+                            onSuccess={handleVerifySuccess}
+                            onError={handleVerifyError}
+                          />
+                        ) : (
+                          <div className="text-center p-6">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                            <p className="text-sm text-muted-foreground">Preparing verification…</p>
+                          </div>
+                        )}
+                        {universalLink ? (
+                          <a
+                            className="text-xs text-primary underline"
+                            href={universalLink}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open in Self app
+                          </a>
+                        ) : null}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Verification is required to enable claiming.</p>
+              </div>
             ) : null}
           </div>
         </CardContent>
