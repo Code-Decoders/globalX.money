@@ -20,6 +20,14 @@ enum AccountType {
   OTHER
 }
 
+enum TransactionStatus {
+  PENDING
+  CLAIMED
+  FAILED
+  EXPIRED
+  ON_HOLD
+}
+
 model Recipient {
   id              String         @id @default(cuid())
   walletAddress   String
@@ -39,4 +47,31 @@ model Recipient {
   updatedAt       DateTime       @updatedAt
 
   @@index([walletAddress])
+}
+
+model Transaction {
+  id               String             @id @default(cuid())
+  senderWallet     String
+  recipientId      String?
+  recipientEmail   String?            @db.VarChar(160)
+  recipientPhone   String?            @db.VarChar(60)
+  status           TransactionStatus  @default(PENDING)
+  fromAmount       Decimal            @db.Decimal(18, 2)
+  currencyFrom     String             @db.VarChar(10) @default("USD")
+  currencyTo       String             @db.VarChar(10) @default("INR")
+  notes            String?            @db.Text
+  purpose          String             @db.VarChar(280)
+  quoteId          String?            @db.VarChar(120)
+  quoteSnapshot    Json?
+  quoteExpiresAt   DateTime?
+  claimExpiresAt   DateTime?
+  claimedAt        DateTime?
+  gpsTransactionId String?            @db.VarChar(160)
+  gpsResponse      Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([recipientId])
+  @@index([senderWallet])
+  @@index([status])
 }

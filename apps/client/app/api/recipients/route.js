@@ -6,9 +6,6 @@ import { prisma } from "@/lib/prisma";
 const GPS_API_KEY = process.env.GPS_API_KEY;
 const GPS_API_SECRET = process.env.GPS_API_SECRET;
 const GPS_BASE_URL = process.env.GPS_BASE_URL ?? "https://stg-global-payments.arpdigital.io/api/v1";
-const GPS_CLIENT_BASE_URL =
-  process.env.GPS_CLIENT_BASE_URL ??
-  (GPS_BASE_URL.endsWith("/api/v1") ? GPS_BASE_URL.replace(/\/api\/v1$/, "/api/client") : `${GPS_BASE_URL}/client`);
 const GPS_SENDER_ID = process.env.GPS_SENDER_ID ?? "59e11c00-623b-4238-8b0e-c2192b6010c8";
 const GPS_RECIPIENT_COUNTRY = process.env.GPS_RECIPIENT_COUNTRY ?? "IND";
 
@@ -93,7 +90,7 @@ const createGpsRecipient = async (body) => {
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signature = generateSignature(bodyString, timestamp);
 
-  const response = await fetch(`${GPS_CLIENT_BASE_URL}/recipients`, {
+  const response = await fetch(`${GPS_BASE_URL}/recipients`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -609,6 +609,11 @@ export default function QuotePage() {
       return;
     }
 
+    if (!address) {
+      setPaymentError("Connect your wallet to continue.");
+      return;
+    }
+
     const amountNumeric = Number.parseFloat(String(sendAmount || "0"));
     if (!Number.isFinite(amountNumeric) || amountNumeric <= 0) {
       setPaymentError("Enter a valid send amount.");
@@ -621,14 +626,19 @@ export default function QuotePage() {
     setTransactionSubmitting(true);
 
     const payload = {
+      senderWallet: address,
       recipientId: String(selectedRecipient.id),
       fromAmount: amountNumeric.toString(),
       notes: paymentDescription.trim(),
       purposeOfPayment: paymentPurpose.trim(),
+      quoteId: quoteData?.id ?? null,
+      quoteSnapshot: quoteData ?? null,
+      quoteExpiresAt: quoteData?.expiresAt ?? null,
+      claimBaseUrl: typeof window !== "undefined" ? window.location.origin : undefined,
     };
 
     try {
-      const response = await fetch("/api/gps/transactions", {
+      const response = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -640,7 +650,11 @@ export default function QuotePage() {
         throw new Error(data?.error || "Failed to execute transaction");
       }
 
-      setTransactionFeedback("Transaction submitted successfully.");
+      const claimMessage = data?.claimUrl
+        ? `Transfer request created. Share this link with your recipient: ${data.claimUrl}`
+        : "Transaction request created successfully.";
+
+      setTransactionFeedback(claimMessage);
       setTransactionFeedbackType("success");
       resetFlow();
     } catch (error) {
@@ -652,8 +666,10 @@ export default function QuotePage() {
       setTransactionSubmitting(false);
     }
   }, [
+    address,
     paymentDescription,
     paymentPurpose,
+    quoteData,
     resetFlow,
     selectedRecipient,
     sendAmount,
