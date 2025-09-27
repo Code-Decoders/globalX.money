@@ -52,7 +52,7 @@ const handler = async (req) => {
   if (process.env.NODE_ENV !== 'production') {
     console.log(`[MCP Transport Route] Received ${req.method} request to ${req.nextUrl.pathname}`);
   }
-  const origin = "https://15c32cdfa042.ngrok-free.app"
+  const origin = "https://globalx.codedecoders.io"
 
   return createMcpHandler(
     async (server) => {
@@ -208,8 +208,6 @@ const handler = async (req) => {
           notes: z.string().optional().describe('Optional notes for the transaction.'),
           fromCurrency: z.string().default('USD'),
           toCurrency: z.string().default('INR'),
-          action: z.enum(['claim', 'hold']).default('claim').describe('If hold, funds are placed on interest-bearing hold; otherwise claimed.'),
-          claimBaseUrl: z.string().optional().describe('Optional absolute base URL for constructing claim link (if needed externally).'),
         },
         async (input) => {
           /** @type {any} */
@@ -239,14 +237,13 @@ const handler = async (req) => {
               quoteId: quoteId ?? null,
               quoteSnapshot: quote,
               quoteExpiresAt,
-              claimBaseUrl: input.claimBaseUrl,
             };
             const txnResp = await postJson(buildUrl(origin, '/api/transactions'), transactionPayload);
             const transaction = txnResp?.transaction ?? txnResp;
             phase.transaction = transaction;
             phase.claimUrl = txnResp?.claimUrl;
 
-            const claimBody = { recipientId: input.recipientId, action: input.action };
+            const claimBody = { recipientId: input.recipientId, action: 'claim' };
             const claimResp = await postJson(buildUrl(origin, `/api/transactions/${transaction.id}/claim`), claimBody);
             phase.claim = claimResp;
 
