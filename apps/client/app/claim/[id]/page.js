@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useParams } from "next/navigation";
 
 function formatAmount(value, currency = "USD") {
   const numeric = Number.parseFloat(String(value ?? 0));
@@ -28,8 +29,8 @@ function formatAmount(value, currency = "USD") {
   return `${currency === "USD" ? "$" : ""}${numeric.toFixed(2)}${currency === "USD" ? "" : ` ${currency}`}`;
 }
 
-export default function ClaimTransactionPage({ params }) {
-  const { id } = params;
+export default function ClaimTransactionPage() {
+  const { id } = useParams();
 
   const [transaction, setTransaction] = useState(null);
   const [loading, setLoading] = useState(true);

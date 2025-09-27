@@ -970,7 +970,7 @@ export default function QuotePage() {
 
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-auto shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Recipient</p>
@@ -1071,7 +1071,7 @@ export default function QuotePage() {
   if (stage === "recipientForm") {
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full h-[600px] overflow-y-auto shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-auto shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
             <div className="flex items-center gap-3">
               <Button
@@ -1137,7 +1137,7 @@ export default function QuotePage() {
   if (stage === "payment") {
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-auto shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Payment details</p>
@@ -1209,7 +1209,7 @@ export default function QuotePage() {
   if (stage === "confirm") {
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-auto shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Review</p>
@@ -1357,7 +1357,7 @@ export default function QuotePage() {
 
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-auto shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
 
             {transactionFeedback && transactionFeedbackType === "success" ? (
