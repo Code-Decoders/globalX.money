@@ -29,17 +29,6 @@ export default function Template({ children }) {
         <div className="flex min-h-screen flex-col bg-background text-foreground">
             <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-8">
                 <div className="text-lg font-semibold tracking-tight">GlobalX.money</div>
-                <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-                    <a className="transition-colors hover:text-foreground" href="#">
-                        Product
-                    </a>
-                    <a className="transition-colors hover:text-foreground" href="#">
-                        Exchange rates
-                    </a>
-                    <a className="transition-colors hover:text-foreground" href="#">
-                        Help
-                    </a>
-                </nav>
                 <ModeToggle />
             </header>
 
