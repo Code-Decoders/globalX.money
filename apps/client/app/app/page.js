@@ -1468,7 +1468,7 @@ export default function QuotePage() {
                   ) : (
                     <>
                       <p>
-                        Settlement balance: <span className="font-semibold text-card-foreground">{"$"+walletBalance.toFixed(2)}</span>
+                        Settlement balance: <span className="font-semibold text-card-foreground">{"$"+userDeposit.toFixed(2)}</span>
                       </p>
                     </>
                   )
