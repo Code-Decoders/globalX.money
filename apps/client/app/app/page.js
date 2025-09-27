@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useChainId, useAccount, useDisconnect, useSwitchChain, useReadContract, useBalance } from "wagmi";
 import { formatUnits } from "viem";
 import { LogOut } from "lucide-react";
@@ -13,15 +14,8 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { SEPOLIA_CHAIN_ID, CENTRAL_WALLET_ADDRESS, PYUSD_DECIMALS, PYUSD_TOKEN_ADDRESS } from "@/lib/constants";
-import { set } from "zod/mini";
-
-const quote = {
-  sendAmount: "1000.00",
-  receiveAmount: "82140.57",
-  fee: "$5.00",
-  rate: "$1 = ₹82.56",
-  eta: "~45 seconds",
-};
+const DEFAULT_SEND_AMOUNT = "1000";
+const REFRESH_INTERVAL_MS = 60_000;
 
 const accountTypes = ["Savings", "Current", "NRE", "NRO", "Other"];
 
@@ -515,12 +509,119 @@ export default function QuotePage() {
     }
   }, [recipientForm, recipientStep, updateRecipientForm]);
 
-  const [sendAmount, setSendAmount] = useState(quote.sendAmount);
+  const [sendAmount, setSendAmount] = useState(DEFAULT_SEND_AMOUNT);
+  const [receiveAmount, setReceiveAmount] = useState("");
+  const [amountSource, setAmountSource] = useState("from");
+  const [refreshCountdown, setRefreshCountdown] = useState(REFRESH_INTERVAL_MS / 1000);
+
+  const amountValue = amountSource === "from" ? sendAmount : receiveAmount;
+  const parsedAmount = Number.parseFloat(amountValue || "0");
+  const canFetchQuote = !isWrongChain && Number.isFinite(parsedAmount) && parsedAmount > 0;
+
+  const quoteQuery = useQuery({
+    queryKey: ["gps-quote", amountSource, amountValue],
+    queryFn: async () => {
+      const trimmedAmount = amountValue?.trim();
+      if (!trimmedAmount) {
+        throw new Error("Amount is required");
+      }
+
+      const payload = {
+        fromCurrency: "USD",
+        toCurrency: "INR",
+        ...(amountSource === "from" ? { fromAmount: trimmedAmount } : { toAmount: trimmedAmount }),
+      };
+
+      const response = await fetch("/api/gps/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to fetch quote");
+      }
+
+      if (!data?.success || !data?.data) {
+        throw new Error("Invalid quote response");
+      }
+
+      return data.data;
+    },
+    enabled: canFetchQuote,
+    refetchInterval: canFetchQuote ? REFRESH_INTERVAL_MS : false,
+  });
+
+  const quoteData = quoteQuery.data;
+  const quoteErrorMessage = quoteQuery.error instanceof Error ? quoteQuery.error.message : quoteQuery.error ? "Unable to fetch quote" : "";
+
+  const sendAmountNumber = Number.parseFloat(sendAmount || "0");
+  const receiveAmountNumber = Number.parseFloat(receiveAmount || "0");
+  const formattedSendAmount = Number.isFinite(sendAmountNumber) ? sendAmountNumber.toFixed(2) : "0.00";
+  const formattedReceiveAmount = Number.isFinite(receiveAmountNumber) ? receiveAmountNumber.toFixed(2) : "";
+
+  const rateValue = quoteData?.rate ? Number.parseFloat(String(quoteData.rate)) : null;
+  const midMarketRateValue = quoteData?.midMarketRate ? Number.parseFloat(String(quoteData.midMarketRate)) : null;
+  const rateLabel = rateValue ? `1 USD = ₹${rateValue.toFixed(4)}` : "Rate unavailable";
+  const midMarketLabel = midMarketRateValue ? `₹${midMarketRateValue.toFixed(4)}` : "—";
+  const rateDifferenceValue = rateValue && midMarketRateValue ? ((rateValue - midMarketRateValue) / midMarketRateValue) * 100 : null;
+  const rateDifferenceLabel = typeof rateDifferenceValue === "number" ? `${rateDifferenceValue >= 0 ? "+" : ""}${rateDifferenceValue.toFixed(2)}%` : "—";
+  const countdownLabel = quoteQuery.isFetching
+    ? "Refreshing..."
+    : refreshCountdown > 0
+      ? `Refresh in ${refreshCountdown}s`
+      : canFetchQuote
+        ? "Refresh soon"
+        : "";
 
   const handleMax = useCallback(() => {
     if (!isConnected || isWrongChain) return;
-    setSendAmount(walletBalance.toFixed(2));
+    const value = walletBalance.toFixed(2);
+    setAmountSource("from");
+    setSendAmount(value);
   }, [isConnected, isWrongChain, walletBalance]);
+
+  useEffect(() => {
+    if (!quoteData) return;
+
+    if (amountSource === "from" && quoteData.toAmount) {
+      setReceiveAmount(String(quoteData.toAmount));
+    }
+
+    if (amountSource === "to" && quoteData.fromAmount) {
+      setSendAmount(String(quoteData.fromAmount));
+    }
+  }, [amountSource, quoteData]);
+
+  useEffect(() => {
+    if (!canFetchQuote) {
+      setRefreshCountdown(0);
+      return;
+    }
+
+    setRefreshCountdown(REFRESH_INTERVAL_MS / 1000);
+  }, [canFetchQuote, quoteQuery.dataUpdatedAt]);
+
+  useEffect(() => {
+    if (!canFetchQuote || quoteQuery.isFetching) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setRefreshCountdown((prev) => {
+        if (prev <= 1) {
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [canFetchQuote, quoteQuery.isFetching]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -863,19 +964,25 @@ export default function QuotePage() {
                 <div className="rounded-[var(--radius-lg)] border bg-muted px-4 py-3">
                   <div className="flex items-center justify-between text-xs">
                     <span>You send</span>
-                    <span className="font-semibold text-card-foreground">${Number(sendAmount || 0).toFixed(2)} PYUSD</span>
+                    <span className="font-semibold text-card-foreground">${formattedSendAmount} PYUSD</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span>They receive</span>
-                    <span className="font-semibold text-card-foreground">{quote.receiveAmount} INR</span>
+                    <span className="font-semibold text-card-foreground">
+                      {formattedReceiveAmount ? `${formattedReceiveAmount} INR` : "—"}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span>Fee</span>
-                    <span className="font-semibold text-card-foreground">{quote.fee}</span>
+                    <span>Mid-market rate</span>
+                    <span className="font-semibold text-card-foreground">{midMarketLabel}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span>Rate</span>
-                    <span className="font-semibold text-card-foreground">{quote.rate}</span>
+                    <span className="font-semibold text-card-foreground">{rateLabel}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span>Rate difference</span>
+                    <span className="font-semibold text-card-foreground">{rateDifferenceLabel}</span>
                   </div>
                 </div>
               </div>
@@ -945,7 +1052,15 @@ export default function QuotePage() {
                   type="number"
                   value={sendAmount}
                   min="0"
-                  onChange={(event) => setSendAmount(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    const numericValue = Number.parseFloat(value);
+                    setAmountSource("from");
+                    setSendAmount(value);
+                    if (!value || !Number.isFinite(numericValue) || numericValue <= 0) {
+                      setReceiveAmount("");
+                    }
+                  }}
                   className="border-0 bg-transparent px-0 text-xl font-semibold text-card-foreground shadow-none focus-visible:border-0 focus-visible:ring-0"
                 />
                 <Button
@@ -990,7 +1105,16 @@ export default function QuotePage() {
                     id="receive-amount"
                     type="number"
                     min="0"
-                    defaultValue={quote.receiveAmount}
+                    value={receiveAmount}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      const numericValue = Number.parseFloat(value);
+                      setAmountSource("to");
+                      setReceiveAmount(value);
+                      if (!value || !Number.isFinite(numericValue) || numericValue <= 0) {
+                        setSendAmount("");
+                      }
+                    }}
                     className="border-0 bg-transparent px-0 text-xl font-semibold text-card-foreground shadow-none focus-visible:border-0 focus-visible:ring-0"
                   />
                 </div>
@@ -1002,14 +1126,18 @@ export default function QuotePage() {
 
             <div className="space-y-3 rounded-[var(--radius-lg)] border bg-muted px-4 py-3 text-xs text-muted-foreground">
               <div className="flex items-center justify-between">
-                <span className="font-medium text-card-foreground">{quote.rate}</span>
+                <span className="font-medium text-card-foreground">{rateLabel}</span>
                 <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                  {quote.eta}
+                  {canFetchQuote ? countdownLabel : "Enter an amount"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Transfer fee</span>
-                <span className="font-semibold text-card-foreground">{quote.fee}</span>
+                <span>Mid-market rate</span>
+                <span className="font-semibold text-card-foreground">{midMarketLabel}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Our rate vs mid-market</span>
+                <span className="font-semibold text-card-foreground">{rateDifferenceLabel}</span>
               </div>
               <ul className="space-y-1 pt-1 text-[10px]">
                 <li className="flex items-center gap-2">
@@ -1021,6 +1149,11 @@ export default function QuotePage() {
                   Rate holds for 30 minutes
                 </li>
               </ul>
+              {quoteErrorMessage ? (
+                <p className="rounded-full bg-destructive/10 px-3 py-1 text-center text-[11px] font-semibold text-destructive">
+                  {quoteErrorMessage}
+                </p>
+              ) : null}
               {isWrongChain ? (
                 <p className="rounded-full bg-destructive/10 px-3 py-1 text-center text-[11px] font-semibold text-destructive">
                   Switch to Sepolia to continue
