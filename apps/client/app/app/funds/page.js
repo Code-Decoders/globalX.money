@@ -10,6 +10,18 @@ import {
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
+import { getUniversalLink } from "@selfxyz/core";
+import { SelfAppBuilder } from "@selfxyz/qrcode";
+import dynamic from "next/dynamic";
+import { SelfQRcodeWrapper } from "@selfxyz/qrcode";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { formatUnits, parseUnits } from "viem";
 
@@ -124,6 +136,11 @@ export default function FundsPage() {
 
   const [approvalError, setApprovalError] = useState("");
   const [depositError, setDepositError] = useState("");
+  const [verified, setVerified] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [selfApp, setSelfApp] = useState(null);
+  const [universalLink, setUniversalLink] = useState("");
+  const [verifyOpen, setVerifyOpen] = useState(false);
 
   const requireConnection = useCallback(() => {
     if (!isConnected) {
@@ -137,6 +154,78 @@ export default function FundsPage() {
     }
     return false;
   }, [chainId, isConnected, openConnectModal]);
+
+  // Check verification status when connected
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        if (!address) {
+          setVerified(false);
+          return;
+        }
+        const res = await fetch(`/api/verification?walletAddress=${address}`);
+        const data = await res.json().catch(() => ({}));
+        if (!aborted) setVerified(Boolean(data?.verified));
+      } catch (e) {
+        if (!aborted) setVerified(false);
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [address]);
+
+  const initSelfApp = useCallback(() => {
+    if (!address) return;
+    try {
+      const app = new SelfAppBuilder({
+        version: 2,
+        appName: "ProofOfHumanOApp",
+        scope: "self-codedecoders",
+        endpoint: `0xbE04D187dB8D3DC61AEB5AE3FF2711371D7E307c`.toLowerCase(),
+        userId: address,
+        endpointType: "celo",
+        userIdType: "hex",
+        disclosures: {
+          minimumAge: 18,
+          excludedCountries: ["PAK", "IRQ"],
+        },
+      }).build();
+      setSelfApp(app);
+      setUniversalLink(getUniversalLink(app));
+  setVerifying(true);
+  setVerifyOpen(true);
+    } catch (err) {
+      console.error("Failed to init Self app", err);
+    }
+  }, [address]);
+
+  const handleVerifySuccess = useCallback(async () => {
+      setSelfApp(null);
+      setVerified(true);
+      setVerifying(false);
+      setFeedback("Verification completed");
+      setTimeout(() => setFeedback(""), 1500);
+      setVerifyOpen(false);
+  }, []);
+
+  const handleVerifyError = useCallback((e) => {
+    console.error("Verification error", e);
+    setSelfApp(null);
+    setVerifying(false);
+    setVerifyOpen(false);
+  }, []);
+
+  // Reset verifying state if dialog closes mid-flow
+  const handleVerifyOpenChange = useCallback((open) => {
+    setVerifyOpen(open);
+    if (!open) {
+      setSelfApp(null);
+      setUniversalLink("");
+      setVerifying(false);
+    }
+  }, []);
 
   const applyPercent = useCallback(
     (percent) => {
@@ -159,6 +248,12 @@ export default function FundsPage() {
   }, []);
 
   const handleApprove = useCallback(async () => {
+    if (!verified) {
+      setFeedback("Verify your identity first.");
+      setTimeout(() => setFeedback(""), 2000);
+      if (!verifying) initSelfApp();
+      return;
+    }
     if (requireConnection()) return;
     if (amountBigInt === 0n) {
       setFeedback("Enter an amount first.");
@@ -187,9 +282,15 @@ export default function FundsPage() {
     } finally {
       setApproving(false);
     }
-  }, [amountBigInt, requireConnection, writeContractAsync]);
+  }, [amountBigInt, requireConnection, writeContractAsync, verified, verifying, initSelfApp]);
 
   const handleDeposit = useCallback(async () => {
+    if (!verified) {
+      setFeedback("Verify your identity first.");
+      setTimeout(() => setFeedback(""), 2000);
+      if (!verifying) initSelfApp();
+      return;
+    }
     if (requireConnection()) return;
     if (amountBigInt === 0n) {
       setFeedback("Enter an amount first.");
@@ -223,7 +324,7 @@ export default function FundsPage() {
     } finally {
       setDepositing(false);
     }
-  }, [amountBigInt, needsApproval, requireConnection, writeContractAsync]);
+  }, [amountBigInt, needsApproval, requireConnection, writeContractAsync, verified, verifying, initSelfApp]);
 
   useEffect(() => {
     if (approvalReceipt.status === "success") {
@@ -362,6 +463,54 @@ export default function FundsPage() {
               <li>Keep a little ETH for gas fees.</li>
             </ol>
           </div>
+
+          {!verified ? (
+            <div className="space-y-3 rounded-[var(--radius-lg)] border bg-muted px-4 py-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-card-foreground">Identity verification</span>
+                <Dialog open={verifyOpen} onOpenChange={handleVerifyOpenChange}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" className="rounded-full" onClick={initSelfApp} disabled={!address}>
+                      Verify
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Verify with Self</DialogTitle>
+                      <DialogDescription>
+                        Scan this QR with the Self app to complete verification.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col items-center gap-4 py-2">
+                      {selfApp ? (
+                        <SelfQRcodeWrapper
+                          selfApp={selfApp}
+                          onSuccess={handleVerifySuccess}
+                          onError={handleVerifyError}
+                        />
+                      ) : (
+                        <div className="text-center p-6">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                          <p className="text-sm text-muted-foreground">Preparing verification…</p>
+                        </div>
+                      )}
+                      {universalLink ? (
+                        <a
+                          className="text-xs text-primary underline"
+                          href={universalLink}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open in Self app
+                        </a>
+                      ) : null}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Verification is required before depositing.</p>
+            </div>
+          ) : null}
         </CardContent>
 
         <CardFooter className="flex flex-col gap-4 px-6 pb-6">
@@ -372,13 +521,16 @@ export default function FundsPage() {
             disabled={
               !isConnected ||
               amountBigInt === 0n ||
+              !verified ||
               approving ||
               depositing ||
               isApprovalPending ||
               isDepositPending
             }
           >
-            {approving || depositing || isApprovalPending || isDepositPending
+            {!verified
+              ? "Verify to deposit"
+              : approving || depositing || isApprovalPending || isDepositPending
               ? "Depositing…"
               : "Deposit"}
           </Button>

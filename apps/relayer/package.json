@@ -1,0 +1,30 @@
+{
+  "name": "@project-py/relayer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self Protocol verification relayer service",
+  "author": "Rana Satyam Raj <ranasatyamraj@gmail.com>",
+  "keywords": [
+    "blockchain",
+    "self",
+    "kyc",
+    "relayer",
+    "celo",
+    "sepolia"
+  ],
+  "license": "ISC",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon index.js",
+    "start": "./bin/app",
+    "build": "echo 'No build step needed for Express app'",
+    "lint": "echo 'Linting relayer...'",
+    "check-types": "echo 'No type checking needed for JS app'"
+  },
+  "dependencies": {
+    "ethers": "^6.15.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

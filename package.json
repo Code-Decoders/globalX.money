@@ -9,6 +9,15 @@
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
+    "axios": "^1.12.2",
+    "dotenv": "^17.2.2",
+    "ejs": "^3.1.10",
+    "ethers": "^6.15.0",
+    "express": "^5.1.0",
+    "http-errors": "^2.0.0",
+    "pino": "^9.11.0",
+    "pino-http": "^10.5.0",
+    "pino-pretty": "^13.1.1",
     "turbo": "^2.5.8",
     "typescript": "5.9.2"
   },
@@ -19,5 +28,9 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "dependencies": {
+    "@selfxyz/core": "^1.0.8",
+    "@selfxyz/qrcode": "^1.0.11"
+  }
 }
