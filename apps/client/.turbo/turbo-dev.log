@@ -1,0 +1,62 @@
+
+> globalx-money-client@0.1.0 dev
+> next dev --turbopack
+
+[1G[0K   [1m[38;2;173;127;168m▲ Next.js 15.2.4[39m[22m (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://172.28.208.90:3000
+   - Environments: .env
+   - Experiments (use with caution):
+     [1m✓[22m authInterrupts
+
+ [32m[1m✓[22m[39m Starting...
+ [32m[1m✓[22m[39m Ready in 4.3s
+ [37m[1m○[22m[39m Compiling / ...
+ [32m[1m✓[22m[39m Compiled / in 18.4s
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not defined. RainbowKit will not be able to connect to wallets until it is set.
+(node:82319) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Lit is in dev mode. Not recommended for production! See https://lit.dev/msg/dev-mode for more information.
+ GET / [32m200[39m in 21354ms
+ [37m[1m○[22m[39m Compiling /favicon.ico ...
+ HEAD / [32m200[39m in 711ms
+[Reown Config] Failed to fetch remote project configuration. Using local/default values. Error: HTTP status code: 403
+    at fetchData (../../../../src/utils/FetchUtil.ts:23:16)
+    at async FetchUtil.get (../../../../src/utils/FetchUtil.ts:44:21)
+    at async Object.fetchProjectConfig (../../../../src/controllers/ApiController.ts:158:21)
+    at async Object.fetchRemoteFeatures (../../../../src/utils/ConfigUtil.ts:233:25)
+    at async AppKit.initialize (../../../../src/client/appkit-base-client.ts:165:26) {
+  [cause]: Response {
+    status: [33m403[39m,
+    statusText: [32m'Forbidden'[39m,
+    headers: Headers {
+      date: [32m'Sat, 27 Sep 2025 16:47:12 GMT'[39m,
+      [32m'content-type'[39m: [32m'text/plain; charset=UTF-8'[39m,
+      [32m'content-length'[39m: [32m'9'[39m,
+      connection: [32m'keep-alive'[39m,
+      [32m'cf-ray'[39m: [32m'985c7b3939fca722-DEL'[39m,
+      [32m'access-control-allow-origin'[39m: [32m'*'[39m,
+      [32m'cache-control'[39m: [32m'public, max-age=300, s-maxage=300'[39m,
+      [32m'cf-placement'[39m: [32m'local-DEL'[39m,
+      vary: [32m'Accept-Encoding'[39m,
+      server: [32m'cloudflare'[39m,
+      [32m'alt-svc'[39m: [32m'h3=":443"; ma=86400'[39m
+    },
+    body: [90mundefined[39m,
+    bodyUsed: [33mfalse[39m,
+    ok: [33mfalse[39m,
+    redirected: [33mfalse[39m,
+    type: [32m'default'[39m,
+    url: [32m'https://api.web3modal.org/appkit/v1/config?projectId=00000000000000000000000000000000&st=appkit&sv=html-core-1.7.8'[39m
+  }
+}
+ [32m[1m✓[22m[39m Compiled /favicon.ico in 2.8s
+ GET /favicon.ico?favicon.45db1c09.ico [32m200[39m in 2927ms
+ [37m[1m○[22m[39m Compiling /app ...
+ [32m[1m✓[22m[39m Compiled /app in 7.7s
+ GET /app [32m200[39m in 8290ms
+ GET /favicon.ico?favicon.45db1c09.ico [32m200[39m in 520ms
+ [37m[1m○[22m[39m Compiling /api/gps/quote ...
+ [32m[1m✓[22m[39m Compiled /api/gps/quote in 2.1s
+ HEAD /app [32m200[39m in 2042ms
+ POST /api/gps/quote [32m200[39m in 4545ms
