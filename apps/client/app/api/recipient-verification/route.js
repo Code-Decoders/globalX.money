@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { SelfBackendVerifier, AllIds, DefaultConfigStore } from "@selfxyz/core";
 
 const SCOPE = process.env.NEXT_PUBLIC_SELF_SCOPE || "self-codedecoders";
-const VERIFY_ENDPOINT = process.env.NEXT_PUBLIC_SELF_RECIPIENT_VERIFY_ENDPOINT || 
-  (process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/api/recipient-verification` : 
-   "https://ranaco.loca.lt/api/recipient-verification");
+// Use Self docs verify endpoint by default; this API route acts as your backend verifier
+const VERIFY_ENDPOINT =
+  process.env.SELF_BACKEND_VERIFY_ENDPOINT ||
+  "https://ranaco.loca.lt/api/recipient-verification";
 const MOCK_PASSPORT = false;
-const USER_ID_TYPE = process.env.SELF_USER_IDENTIFIER_TYPE || "uuid";
+const USER_ID_TYPE = "uuid";
 
 const verifier = new SelfBackendVerifier(
   SCOPE,
@@ -14,32 +15,43 @@ const verifier = new SelfBackendVerifier(
   MOCK_PASSPORT,
   AllIds,
   new DefaultConfigStore({
-    
-    minimumAge: 0,
     excludedCountries: [],
+    minimumAge: 0,
     ofac: false,
   }),
-  USER_ID_TYPE,
+  USER_ID_TYPE
 );
 
 export async function POST(request) {
   try {
-    const { attestationId, proof, publicSignals, userContextData } = await request.json();
+    const { attestationId, proof, publicSignals, userContextData } =
+      await request.json();
 
-    console.log('Received verification request:', { attestationId, proof, publicSignals, userContextData });
+    console.log("Received verification request:", {
+      attestationId,
+      proof,
+      publicSignals,
+      userContextData,
+    });
 
     if (!proof || !publicSignals || !attestationId || !userContextData) {
       return NextResponse.json(
         {
           status: "error",
           result: false,
-          reason: "Proof, publicSignals, attestationId and userContextData are required",
+          reason:
+            "Proof, publicSignals, attestationId and userContextData are required",
         },
-        { status: 200 },
+        { status: 200 }
       );
     }
 
-    const result = await verifier.verify(attestationId, proof, publicSignals, userContextData);
+    const result = await verifier.verify(
+      attestationId,
+      proof,
+      publicSignals,
+      userContextData
+    );
 
     if (!result?.isValidDetails?.isValid) {
       return NextResponse.json(
@@ -49,7 +61,7 @@ export async function POST(request) {
           reason: "Verification failed",
           details: result?.isValidDetails || null,
         },
-        { status: 200 },
+        { status: 200 }
       );
     }
 
@@ -61,7 +73,7 @@ export async function POST(request) {
           result: false,
           reason: "Nationality was not disclosed",
         },
-        { status: 200 },
+        { status: 200 }
       );
     }
 
@@ -72,7 +84,7 @@ export async function POST(request) {
         credentialSubject: result.discloseOutput,
         nationality,
       },
-      { status: 200 },
+      { status: 200 }
     );
   } catch (error) {
     return NextResponse.json(
@@ -81,7 +93,7 @@ export async function POST(request) {
         result: false,
         reason: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 200 },
+      { status: 200 }
     );
   }
 }
@@ -94,5 +106,6 @@ export async function GET() {
     scope: SCOPE,
     endpoint: VERIFY_ENDPOINT,
     mockPassport: MOCK_PASSPORT,
+    userIdType: USER_ID_TYPE,
   });
 }

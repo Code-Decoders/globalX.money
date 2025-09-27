@@ -2,22 +2,10 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { countries, getUniversalLink } from "@selfxyz/core";
-import { SelfAppBuilder } from "@selfxyz/qrcode";
-import dynamic from "next/dynamic";
-import { SelfQRcodeWrapper } from "@selfxyz/qrcode";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import { useChainId, useAccount, useDisconnect, useSwitchChain, useReadContract, useBalance } from "wagmi";
 import { formatUnits } from "viem";
-import { LogOut } from "lucide-react";
+import { Check, Copy, LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -28,7 +16,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { SEPOLIA_CHAIN_ID, CENTRAL_WALLET_ADDRESS, PYUSD_DECIMALS, PYUSD_TOKEN_ADDRESS } from "@/lib/constants";
-const DEFAULT_SEND_AMOUNT = "1000";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { getUniversalLink } from "@selfxyz/core";
+import { SelfAppBuilder, SelfQRcodeWrapper } from "@selfxyz/qrcode";
+const DEFAULT_SEND_AMOUNT = "1.15";
 const REFRESH_INTERVAL_MS = 60_000;
 
 const accountTypes = ["Savings", "Current", "NRE", "NRO", "Other"];
@@ -66,6 +57,7 @@ export default function QuotePage() {
   const { switchChainAsync } = useSwitchChain();
   const switchAttemptedRef = useRef(false);
   const feedbackTimeoutRef = useRef(null);
+  const claimCopyTimeoutRef = useRef(null);
 
   const [recipients, setRecipients] = useState([]);
   const [recipientStatus, setRecipientStatus] = useState("idle");
@@ -78,6 +70,8 @@ export default function QuotePage() {
   const [paymentPurpose, setPaymentPurpose] = useState("");
   const [paymentDescription, setPaymentDescription] = useState("");
   const [paymentError, setPaymentError] = useState("");
+
+  // Verification state (Self)
   const [verified, setVerified] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [selfApp, setSelfApp] = useState(null);
@@ -146,6 +140,13 @@ export default function QuotePage() {
     }
   }, []);
 
+  const clearClaimCopyTimeout = useCallback(() => {
+    if (claimCopyTimeoutRef.current) {
+      window.clearTimeout(claimCopyTimeoutRef.current);
+      claimCopyTimeoutRef.current = null;
+    }
+  }, []);
+
   const resetRecipientFeedback = useCallback(() => {
     clearFeedbackTimeout();
     feedbackTimeoutRef.current = window.setTimeout(() => {
@@ -157,8 +158,9 @@ export default function QuotePage() {
   useEffect(() => {
     return () => {
       clearFeedbackTimeout();
+      clearClaimCopyTimeout();
     };
-  }, [clearFeedbackTimeout]);
+  }, [clearClaimCopyTimeout, clearFeedbackTimeout]);
 
   useEffect(() => {
     if (!selectedRecipient) {
@@ -176,83 +178,6 @@ export default function QuotePage() {
       setSelectedRecipient(null);
     }
   }, [isConnected]);
-
-  // Check verification status when connected
-  useEffect(() => {
-    let aborted = false;
-    (async () => {
-      try {
-        if (!address) {
-          setVerified(false);
-          return;
-        }
-        const res = await fetch(`/api/verification?walletAddress=${address}`);
-        const data = await res.json().catch(() => ({}));
-        if (!aborted) setVerified(Boolean(data?.verified));
-      } catch (e) {
-        if (!aborted) setVerified(false);
-      }
-    })();
-    return () => {
-      aborted = true;
-    };
-  }, [address]);
-
-  // Prepare Self app instance when needed
-  const initSelfApp = useCallback(() => {
-    if (!address) return;
-    try {
-      const app = new SelfAppBuilder({
-        version: 2,
-        appName: "ProofOfHumanOApp",
-        scope: "self-codedecoders",
-        endpoint: `0xbE04D187dB8D3DC61AEB5AE3FF2711371D7E307c`.toLowerCase(),
-        userId: address,
-        endpointType: "celo",
-        userIdType: "hex",
-        disclosures: {
-          minimumAge: 18,
-          excludedCountries: ["PAK", "IRQ"],
-        },
-      }).build();
-      setSelfApp(app);
-      setUniversalLink(getUniversalLink(app));
-      setVerifying(true);
-      setVerifyOpen(true);
-    } catch (err) {
-      console.error("Failed to init Self app", err);
-    }
-  }, [address]);
-
-  // No auto-open; verification is initiated explicitly by user on final step
-
-  const handleVerifySuccess = useCallback(async () => {
-    try {
-      setSelfApp(null);
-      setVerified(true);
-      setVerifying(false);
-      setVerifyOpen(false);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  const handleVerifyError = useCallback((e) => {
-    console.error("Verification error", e);
-    setSelfApp(null);
-    setVerifying(false);
-    setVerifyOpen(false);
-  }, []);
-
-  // Reset verifying state when user closes the dialog manually
-  const handleVerifyOpenChange = useCallback((open) => {
-    setVerifyOpen(open);
-    if (!open) {
-      setSelfApp(null);
-      setUniversalLink("");
-      setVerifying(false);
-    }
-  }, []);
 
   const validateRecipientStep = useCallback(() => {
     if (recipientStep === 1) {
@@ -346,6 +271,7 @@ export default function QuotePage() {
         throw new Error(responseData.error || "Failed to save recipient");
       }
       const rawRecipient = responseData.recipient ?? responseData ?? {};
+      const gpsRecipient = responseData.gpsRecipient ?? null;
       const normalizedRecipient = {
         ...rawRecipient,
         ...payload,
@@ -358,6 +284,12 @@ export default function QuotePage() {
               ? "BUSINESS"
               : payload.type ?? "INDIVIDUAL"),
       };
+      if (gpsRecipient) {
+        normalizedRecipient.gpsRecipient = gpsRecipient;
+        if (gpsRecipient.id && !normalizedRecipient.gpsRecipientId) {
+          normalizedRecipient.gpsRecipientId = gpsRecipient.id;
+        }
+      }
 
       setRecipientFeedback("Recipient saved");
       setRecipientForm(emptyRecipientForm);
@@ -444,13 +376,139 @@ export default function QuotePage() {
     setStage("payment");
   }, [setStage]);
 
-  const handleResetFlow = useCallback(() => {
+  const [transactionSubmitting, setTransactionSubmitting] = useState(false);
+  const [transactionFeedback, setTransactionFeedback] = useState("");
+  const [transactionFeedbackType, setTransactionFeedbackType] = useState("");
+  const [claimUrl, setClaimUrl] = useState("");
+  const [claimCopyStatus, setClaimCopyStatus] = useState("");
+
+  // Load on-chain verification status when wallet changes
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        if (!address) {
+          setVerified(false);
+          return;
+        }
+        const res = await fetch(`/api/verification?walletAddress=${address}`);
+        const data = await res.json().catch(() => ({}));
+        if (!aborted) setVerified(Boolean(data?.verified));
+      } catch (e) {
+        if (!aborted) setVerified(false);
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [address]);
+
+  const initSelfApp = useCallback(() => {
+    if (!address) return;
+    try {
+      const app = new SelfAppBuilder({
+        version: 2,
+        appName: "ProofOfHumanOApp",
+        scope: "self-codedecoders",
+        endpoint: `0xbE04D187dB8D3DC61AEB5AE3FF2711371D7E307c`.toLowerCase(),
+        userId: address,
+        endpointType: "celo",
+        userIdType: "hex",
+        disclosures: {
+          minimumAge: 18,
+          excludedCountries: ["PAK", "IRQ"],
+        },
+      }).build();
+      setSelfApp(app);
+      setUniversalLink(getUniversalLink(app));
+      setVerifying(true);
+      setVerifyOpen(true);
+    } catch (err) {
+      console.error("Failed to init Self app", err);
+    }
+  }, [address]);
+
+  const handleVerifySuccess = useCallback(async () => {
+    setSelfApp(null);
+    setVerified(true);
+    setVerifying(false);
+    setVerifyOpen(false);
+  }, []);
+
+  const handleVerifyError = useCallback((e) => {
+    console.error("Verification error", e);
+    setSelfApp(null);
+    setVerifying(false);
+    setVerifyOpen(false);
+  }, []);
+
+  const handleVerifyOpenChange = useCallback((open) => {
+    setVerifyOpen(open);
+    if (!open) {
+      setSelfApp(null);
+      setUniversalLink("");
+      setVerifying(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (stage !== "quote" && transactionFeedbackType === "success") {
+      setTransactionFeedback("");
+      setTransactionFeedbackType("");
+      setClaimUrl("");
+      setClaimCopyStatus("");
+      clearClaimCopyTimeout();
+    }
+  }, [clearClaimCopyTimeout, stage, transactionFeedbackType]);
+
+  useEffect(() => {
+    if (claimUrl) {
+      return;
+    }
+    if (!claimCopyStatus) {
+      return;
+    }
+    setClaimCopyStatus("");
+    clearClaimCopyTimeout();
+  }, [claimCopyStatus, claimUrl, clearClaimCopyTimeout]);
+
+  const resetFlow = useCallback(() => {
     setStage("quote");
     setSelectedRecipient(null);
     setPaymentPurpose("");
     setPaymentDescription("");
     setPaymentError("");
   }, []);
+
+  const handleCopyClaimUrl = useCallback(async () => {
+    if (!claimUrl) {
+      return;
+    }
+
+    const scheduleReset = (delay = 2000) => {
+      clearClaimCopyTimeout();
+      claimCopyTimeoutRef.current = window.setTimeout(() => {
+        setClaimCopyStatus("");
+        claimCopyTimeoutRef.current = null;
+      }, delay);
+    };
+
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      setClaimCopyStatus("unsupported");
+      scheduleReset(2500);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(claimUrl);
+      setClaimCopyStatus("copied");
+      scheduleReset();
+    } catch (copyError) {
+      console.error(copyError);
+      setClaimCopyStatus("failed");
+      scheduleReset(3000);
+    }
+  }, [claimUrl, clearClaimCopyTimeout]);
 
   const renderRecipientStepContent = useCallback(() => {
     switch (recipientStep) {
@@ -696,6 +754,8 @@ export default function QuotePage() {
   const handleMax = useCallback(() => {
     if (!isConnected || isWrongChain) return;
     const value = walletBalance.toFixed(2);
+    setTransactionFeedback("");
+    setTransactionFeedbackType("");
     setAmountSource("from");
     setSendAmount(value);
   }, [isConnected, isWrongChain, walletBalance]);
@@ -965,8 +1025,6 @@ export default function QuotePage() {
                     </div>
                   </div>
                 ) : null}
-
-                {/* Verification is only shown on final step now */}
               </div>
             ) : null}
             {!hasRecipients && isConnected && recipientStatus === "success" ? (
@@ -1013,7 +1071,7 @@ export default function QuotePage() {
   if (stage === "recipientForm") {
     return (
       <section className="flex w-full justify-end lg:flex-1">
-        <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
+        <Card className="w-full h-[600px] overflow-y-auto shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
             <div className="flex items-center gap-3">
               <Button
@@ -1034,7 +1092,7 @@ export default function QuotePage() {
 
             <Separator className="bg-border" />
 
-            <div className="space-y-4">{renderRecipientStepContent()}</div>
+            <div className="space-y-4 overflow-auto">{renderRecipientStepContent()}</div>
           </CardContent>
 
           <CardFooter className="flex flex-col gap-3 px-6 pb-6">
@@ -1127,8 +1185,6 @@ export default function QuotePage() {
                   className="min-h-[120px]"
                 />
               </div>
-
-              {/* Verification prompt moved to final step (confirm) */}
             </div>
           </CardContent>
 
@@ -1230,8 +1286,8 @@ export default function QuotePage() {
                     <span className="text-sm font-semibold text-card-foreground">Identity verification</span>
                     <Dialog open={verifyOpen} onOpenChange={handleVerifyOpenChange}>
                       <DialogTrigger asChild>
-                        <Button size="sm" className="rounded-full" onClick={initSelfApp} disabled={!address || verifying}>
-                          {verifying ? "Preparing…" : "Verify"}
+                        <Button size="sm" className="rounded-full" onClick={initSelfApp} disabled={!address}>
+                          Verify
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="sm:max-w-md">
@@ -1268,7 +1324,7 @@ export default function QuotePage() {
                       </DialogContent>
                     </Dialog>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">Verification is required to confirm this transfer.</p>
+                  <p className="text-[11px] text-muted-foreground">Verification is required before continuing.</p>
                 </div>
               ) : null}
             </div>
@@ -1279,10 +1335,18 @@ export default function QuotePage() {
               <Button variant="ghost" size="sm" className="rounded-full" onClick={handleConfirmBack}>
                 Back
               </Button>
-              <Button size="lg" className="flex-1 rounded-full" onClick={handleResetFlow} disabled={!verified || verifying}>
-                Confirm transfer
+              <Button
+                size="lg"
+                className="flex-1 rounded-full"
+                onClick={handleExecuteTransaction}
+                disabled={!verified || transactionSubmitting}
+              >
+                {!verified ? "Verify to continue" : transactionSubmitting ? "Submitting..." : "Confirm & execute"}
               </Button>
             </div>
+            {transactionFeedback && transactionFeedbackType === "error" ? (
+              <p className="text-center text-[11px] text-destructive">{transactionFeedback}</p>
+            ) : null}
           </CardFooter>
         </Card>
       </section>
@@ -1295,6 +1359,45 @@ export default function QuotePage() {
       <section className="flex w-full justify-end lg:flex-1">
         <Card className="w-full h-[600px] overflow-hidden shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
+
+            {transactionFeedback && transactionFeedbackType === "success" ? (
+              claimUrl ? (
+                <div className="rounded-lg border border-primary/30 bg-primary/10 p-4">
+                  <div className="flex flex-col gap-3 text-left">
+                    <div>
+                      <p className="text-sm font-semibold text-primary">{transactionFeedback}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Share this link with your recipient so they can claim the funds.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-background px-3 py-2">
+                      <span className="flex-1 truncate text-xs font-medium text-card-foreground">{claimUrl}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1 rounded-full px-3 text-xs"
+                        onClick={handleCopyClaimUrl}
+                      >
+                        {claimCopyStatus === "copied" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        {claimCopyStatus === "copied" ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                    {claimCopyStatus === "failed" ? (
+                      <p className="text-xs text-destructive">Copy failed. Try again or copy manually.</p>
+                    ) : claimCopyStatus === "unsupported" ? (
+                      <p className="text-xs text-muted-foreground">Clipboard access unavailable. Copy the link manually.</p>
+                    ) : claimCopyStatus === "copied" ? (
+                      <p className="text-xs text-primary">Link copied to your clipboard.</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-full bg-primary/10 px-4 py-2 text-center text-xs font-semibold text-primary">
+                  {transactionFeedback}
+                </div>
+              )
+            ) : null}
 
             <div className="space-y-2">
               <Label htmlFor="send-amount" className="text-xs font-semibold uppercase text-muted-foreground">
@@ -1309,6 +1412,10 @@ export default function QuotePage() {
                   onChange={(event) => {
                     const value = event.target.value;
                     const numericValue = Number.parseFloat(value);
+                    if (transactionFeedback) {
+                      setTransactionFeedback("");
+                      setTransactionFeedbackType("");
+                    }
                     setAmountSource("from");
                     setSendAmount(value);
                     if (!value || !Number.isFinite(numericValue) || numericValue <= 0) {
@@ -1386,6 +1493,10 @@ export default function QuotePage() {
                     onChange={(event) => {
                       const value = event.target.value;
                       const numericValue = Number.parseFloat(value);
+                      if (transactionFeedback) {
+                        setTransactionFeedback("");
+                        setTransactionFeedbackType("");
+                      }
                       setAmountSource("to");
                       setReceiveAmount(value);
                       if (!value || !Number.isFinite(numericValue) || numericValue <= 0) {

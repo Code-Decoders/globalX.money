@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getUniversalLink } from "@selfxyz/core";
+import { v4 as uuidv4 } from "uuid";
 import { SelfAppBuilder } from "@selfxyz/qrcode";
 import dynamic from "next/dynamic";
 const SelfQRcodeWrapper = dynamic(() => import("@selfxyz/qrcode").then(m => m.SelfQRcodeWrapper), { ssr: false });
@@ -96,7 +97,7 @@ export default function ClaimTransactionPage({ params }) {
         appName: process.env.NEXT_PUBLIC_SELF_APP_NAME || "ProofOfHumanOApp",
         scope: process.env.NEXT_PUBLIC_SELF_SCOPE || "self-codedecoders",
         endpoint: (process.env.NEXT_PUBLIC_SELF_RECIPIENT_VERIFY_ENDPOINT || (process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/api/recipient-verification` : "https://ranaco.loca.lt/api/recipient-verification")),
-        userId: id,
+        userId: uuidv4(),
         endpointType: "staging_https",
         userIdType: "uuid",
         userDefinedData: JSON.stringify({ transactionId: id }),

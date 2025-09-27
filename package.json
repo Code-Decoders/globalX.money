@@ -31,6 +31,7 @@
   ],
   "dependencies": {
     "@selfxyz/core": "^1.0.8",
-    "@selfxyz/qrcode": "^1.0.11"
+    "@selfxyz/qrcode": "^1.0.11",
+    "uuid": "^13.0.0"
   }
 }
