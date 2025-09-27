@@ -133,7 +133,8 @@ export default function RecipientAddPage() {
       resetFeedback();
     } catch (error) {
       console.error(error);
-      setFeedback(error.message);
+      const message = error instanceof Error ? error.message : "Failed to save recipient";
+      setFeedback(message);
       resetFeedback();
     } finally {
       setSubmitting(false);

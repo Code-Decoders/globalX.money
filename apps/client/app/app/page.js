@@ -14,7 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { SEPOLIA_CHAIN_ID, CENTRAL_WALLET_ADDRESS, PYUSD_DECIMALS, PYUSD_TOKEN_ADDRESS } from "@/lib/constants";
-const DEFAULT_SEND_AMOUNT = "1000";
+const DEFAULT_SEND_AMOUNT = "1.15";
 const REFRESH_INTERVAL_MS = 60_000;
 
 const accountTypes = ["Savings", "Current", "NRE", "NRO", "Other"];
@@ -242,6 +242,7 @@ export default function QuotePage() {
         throw new Error(responseData.error || "Failed to save recipient");
       }
       const rawRecipient = responseData.recipient ?? responseData ?? {};
+      const gpsRecipient = responseData.gpsRecipient ?? null;
       const normalizedRecipient = {
         ...rawRecipient,
         ...payload,
@@ -254,6 +255,12 @@ export default function QuotePage() {
               ? "BUSINESS"
               : payload.type ?? "INDIVIDUAL"),
       };
+      if (gpsRecipient) {
+        normalizedRecipient.gpsRecipient = gpsRecipient;
+        if (gpsRecipient.id && !normalizedRecipient.gpsRecipientId) {
+          normalizedRecipient.gpsRecipientId = gpsRecipient.id;
+        }
+      }
 
       setRecipientFeedback("Recipient saved");
       setRecipientForm(emptyRecipientForm);
@@ -340,7 +347,18 @@ export default function QuotePage() {
     setStage("payment");
   }, [setStage]);
 
-  const handleResetFlow = useCallback(() => {
+  const [transactionSubmitting, setTransactionSubmitting] = useState(false);
+  const [transactionFeedback, setTransactionFeedback] = useState("");
+  const [transactionFeedbackType, setTransactionFeedbackType] = useState("");
+
+  useEffect(() => {
+    if (stage !== "quote" && transactionFeedbackType === "success") {
+      setTransactionFeedback("");
+      setTransactionFeedbackType("");
+    }
+  }, [stage, transactionFeedbackType]);
+
+  const resetFlow = useCallback(() => {
     setStage("quote");
     setSelectedRecipient(null);
     setPaymentPurpose("");
@@ -579,9 +597,68 @@ export default function QuotePage() {
   const handleMax = useCallback(() => {
     if (!isConnected || isWrongChain) return;
     const value = walletBalance.toFixed(2);
+    setTransactionFeedback("");
+    setTransactionFeedbackType("");
     setAmountSource("from");
     setSendAmount(value);
   }, [isConnected, isWrongChain, walletBalance]);
+
+  const handleExecuteTransaction = useCallback(async () => {
+    if (!selectedRecipient) {
+      setPaymentError("Select a recipient before continuing.");
+      return;
+    }
+
+    const amountNumeric = Number.parseFloat(String(sendAmount || "0"));
+    if (!Number.isFinite(amountNumeric) || amountNumeric <= 0) {
+      setPaymentError("Enter a valid send amount.");
+      return;
+    }
+
+    setPaymentError("");
+    setTransactionFeedback("");
+    setTransactionFeedbackType("");
+    setTransactionSubmitting(true);
+
+    const payload = {
+      recipientId: String(selectedRecipient.id),
+      fromAmount: amountNumeric.toString(),
+      notes: paymentDescription.trim(),
+      purposeOfPayment: paymentPurpose.trim(),
+    };
+
+    try {
+      const response = await fetch("/api/gps/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to execute transaction");
+      }
+
+      setTransactionFeedback("Transaction submitted successfully.");
+      setTransactionFeedbackType("success");
+      resetFlow();
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "Failed to execute transaction";
+      setTransactionFeedback(message);
+      setTransactionFeedbackType("error");
+    } finally {
+      setTransactionSubmitting(false);
+    }
+  }, [
+    paymentDescription,
+    paymentPurpose,
+    resetFlow,
+    selectedRecipient,
+    sendAmount,
+    setPaymentError,
+  ]);
 
   useEffect(() => {
     if (!quoteData) return;
@@ -1025,10 +1102,18 @@ export default function QuotePage() {
               <Button variant="ghost" size="sm" className="rounded-full" onClick={handleConfirmBack}>
                 Back
               </Button>
-              <Button size="lg" className="flex-1 rounded-full" onClick={handleResetFlow}>
-                Confirm transfer
+              <Button
+                size="lg"
+                className="flex-1 rounded-full"
+                onClick={handleExecuteTransaction}
+                disabled={transactionSubmitting}
+              >
+                {transactionSubmitting ? "Submitting..." : "Confirm & execute"}
               </Button>
             </div>
+            {transactionFeedback && transactionFeedbackType === "error" ? (
+              <p className="text-center text-[11px] text-destructive">{transactionFeedback}</p>
+            ) : null}
           </CardFooter>
         </Card>
       </section>
@@ -1041,6 +1126,12 @@ export default function QuotePage() {
       <section className="flex w-full justify-end lg:flex-1">
         <Card className="w-full shadow-lg sm:max-w-md md:max-w-md">
           <CardContent className="space-y-6 px-6 pb-2">
+
+            {transactionFeedback && transactionFeedbackType === "success" ? (
+              <div className="rounded-full bg-primary/10 px-4 py-2 text-center text-xs font-semibold text-primary">
+                {transactionFeedback}
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <Label htmlFor="send-amount" className="text-xs font-semibold uppercase text-muted-foreground">
@@ -1055,6 +1146,10 @@ export default function QuotePage() {
                   onChange={(event) => {
                     const value = event.target.value;
                     const numericValue = Number.parseFloat(value);
+                    if (transactionFeedback) {
+                      setTransactionFeedback("");
+                      setTransactionFeedbackType("");
+                    }
                     setAmountSource("from");
                     setSendAmount(value);
                     if (!value || !Number.isFinite(numericValue) || numericValue <= 0) {
@@ -1109,6 +1204,10 @@ export default function QuotePage() {
                     onChange={(event) => {
                       const value = event.target.value;
                       const numericValue = Number.parseFloat(value);
+                      if (transactionFeedback) {
+                        setTransactionFeedback("");
+                        setTransactionFeedbackType("");
+                      }
                       setAmountSource("to");
                       setReceiveAmount(value);
                       if (!value || !Number.isFinite(numericValue) || numericValue <= 0) {

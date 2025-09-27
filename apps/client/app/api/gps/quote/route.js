@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 const GPS_API_KEY = process.env.GPS_API_KEY;
 const GPS_API_SECRET = process.env.GPS_API_SECRET;
 const GPS_BASE_URL = process.env.GPS_BASE_URL ?? "https://stg-global-payments.arpdigital.io/api/v1";
+const GPS_SENDER_ID = process.env.GPS_SENDER_ID ?? "59e11c00-623b-4238-8b0e-c2192b6010c8";
 
 const REQUIRED_ENV = [
   ["GPS_API_KEY", GPS_API_KEY],
@@ -37,7 +38,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  payload.senderId = '59e11c00-623b-4238-8b0e-c2192b6010c8';
+  payload.senderId = payload.senderId || GPS_SENDER_ID;
 
   const bodyString = JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000).toString();
