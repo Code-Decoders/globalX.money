@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useChainId, useAccount, useDisconnect, useSwitchChain, useReadContract, useBalance } from "wagmi";
 import { formatUnits } from "viem";
@@ -1467,9 +1468,19 @@ export default function QuotePage() {
                     <p>Switch to Sepolia to view balances.</p>
                   ) : (
                     <>
-                      <p>
-                        Settlement balance: <span className="font-semibold text-card-foreground">{"$"+userDeposit.toFixed(2)}</span>
-                      </p>
+                      <div className="flex items-center gap-2 justify-between">
+                        <p className="m-0">
+                          Settlement balance: <span className="font-semibold text-card-foreground">{"$" + userDeposit.toFixed(2)}</span>
+                        </p>
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="outline"
+                          className="h-6 rounded-full px-3 text-[10px] font-semibold"
+                        >
+                          <Link href="/app/funds">Fund</Link>
+                        </Button>
+                      </div>
                     </>
                   )
                 ) : (
