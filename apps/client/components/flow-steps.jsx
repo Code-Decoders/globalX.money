@@ -1,9 +1,9 @@
 "use client";
 
 const steps = [
-  { title: "Quote", description: "Lock rate" },
-  { title: "Add funds", description: "Top up PYUSD" },
-  { title: "Recipient", description: "Payee details" },
+  { title: "Quote", description: "Secure FX & fees" },
+  { title: "Compliance", description: "KYC & funding" },
+  { title: "Recipient", description: "Instant payout" },
 ];
 
 export function FlowSteps({ current }) {

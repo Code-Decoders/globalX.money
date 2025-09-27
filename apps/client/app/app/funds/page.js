@@ -298,7 +298,7 @@ export default function FundsPage() {
       return;
     }
     if (needsApproval) {
-      setFeedback("Approve PYUSD before depositing.");
+      setFeedback("Approve the settlement token before depositing.");
       setTimeout(() => setFeedback(""), 2500);
       return;
     }
@@ -407,12 +407,12 @@ export default function FundsPage() {
 
           <div className="space-y-2">
             <Label className="text-xs font-semibold uppercase text-muted-foreground">
-              Sepolia PYUSD token
+              Settlement token (Sepolia)
             </Label>
             <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border bg-muted px-4 py-3">
               <div className="flex flex-1 flex-col">
                 <span className="font-mono text-sm text-card-foreground">{tokenAddressMasked}</span>
-                <span className="text-[11px] text-muted-foreground">Tap copy to use in your wallet</span>
+                <span className="text-[11px] text-muted-foreground">Tap copy to add the settlement token (PYUSD) to your wallet.</span>
               </div>
               <Button variant="outline" size="sm" onClick={() => handleCopy(PYUSD_TOKEN_ADDRESS, "Token address copied") }>
                 Copy
@@ -422,7 +422,7 @@ export default function FundsPage() {
 
           <div className="space-y-2">
             <Label htmlFor="fund-amount" className="text-xs font-semibold uppercase text-muted-foreground">
-              Amount to send (PYUSD)
+              Amount to send (settlement token)
             </Label>
             <div className="flex items-center gap-3 rounded-[var(--radius-lg)] bg-muted px-4 py-3">
               <Input
@@ -450,7 +450,7 @@ export default function FundsPage() {
             </div>
             {isConnected ? (
               <p className="text-xs font-semibold text-primary">
-                Wallet balance: {walletBalance.toFixed(2)} PYUSD
+                Settlement balance: {walletBalance.toFixed(2)}
               </p>
             ) : null}
           </div>
@@ -459,7 +459,7 @@ export default function FundsPage() {
             <p className="font-semibold text-card-foreground">Funding checklist</p>
             <ol className="list-decimal space-y-1 pl-4">
               <li>Switch wallet to Sepolia.</li>
-              <li>Add PYUSD token if hidden ({tokenAddressMasked}).</li>
+              <li>Add the settlement token (PYUSD) if hidden ({tokenAddressMasked}).</li>
               <li>Keep a little ETH for gas fees.</li>
             </ol>
           </div>

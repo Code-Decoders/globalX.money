@@ -1,5 +1,5 @@
 {
-  "name": "project-py",
+  "name": "globalx-money",
   "private": true,
   "scripts": {
     "build": "turbo run build",

@@ -10,7 +10,7 @@ if (!walletConnectProjectId) {
 }
 
 export const wagmiConfig = getDefaultConfig({
-  appName: "PY Remit",
+  appName: "GlobalX.money",
   projectId: walletConnectProjectId ?? "00000000000000000000000000000000",
   chains: [mainnet, base, optimism, polygon, arbitrum, sepolia],
   ssr: true,
