@@ -1,42 +1,111 @@
 # GlobalX Money Monorepo
 
-A turbo-powered monorepo providing a Web3-enabled cross‑border payout experience with on‑chain identity verification (Self Protocol), settlement balance funding, FX quoting, recipient management and a blockchain relayer that syncs verification proofs across chains.
+A decentralized system which enables users to make cross-border payouts using stablecoin(PyUSD), secured by on-chain and off-chain ZK proofs powered by Self. It provides a simple interface to create payouts, manage recipients and ensures that the recipient is verified before the payouts actually happen, making it a secure and AML-compliant system.
 
-## High-Level Architecture
+### End-to-end sequence
 
+```mermaid
+sequenceDiagram
+  participant U as User Wallet (Sepolia)
+  participant FE as Next.js Frontend (UI)
+  participant API as Next.js API Routes
+  participant DB as Prisma DB
+  participant GPS as GPS API
+  participant SELF as Self Mobile App
+  participant CELO as ProofOfHumanOApp (Celo)
+  participant REL as Relayer (apps/relayer)
+  participant SEP as CentralWallet (Sepolia)
+
+  U->>FE: Connect (wagmi/RainbowKit)
+  FE->>API: GET /api/verification?walletAddress
+  API->>SEP: isHumanVerified(address)
+  SEP-->>API: bool
+  API-->>FE: { verified }
+
+  alt Not verified
+    FE->>SELF: Render Self QR / start verification
+    SELF-->>CELO: Complete verification on-chain
+    CELO-->>CELO: emit VerificationCompleted(user)
+    loop periodic
+      REL->>CELO: queryFilter(VerificationCompleted)
+      CELO-->>REL: events[user]
+      REL->>SEP: setVerifiedHuman(user, true)
+      SEP-->>REL: tx receipt
+    end
+    FE->>API: GET /api/verification?walletAddress
+    API->>SEP: isHumanVerified
+    SEP-->>API: true
+    API-->>FE: { verified: true }
+  end
+
+  FE->>API: POST /api/recipients
+  API->>DB: prisma.recipient.create
+  API->>GPS: POST /recipients (register)
+  GPS-->>API: { id }
+  API-->>FE: { recipient, gpsRecipient }
+
+  FE->>API: POST /api/gps/quote
+  API->>GPS: POST /quote
+  GPS-->>API: { quote }
+  API-->>FE: { quote }
+
+  FE->>API: POST /api/transactions
+  API->>DB: prisma.transaction.create (stores quote snapshot, purpose, claim expiry)
+  API-->>FE: { transaction, claimUrl }
 ```
-                +-----------------------------+
-                |  User Wallet (EVM Sepolia)  |
-                +---------------+-------------+
-                                |
-                                | wagmi / RainbowKit (connect, switch, sign)
-                                v
-+--------------------+    +----------- API Routes (Next.js App Router) ------------+
-| Next.js Frontend   |--> | /api/recipients  (CRUD & GPS sync)                      |
-| (apps/client)      |--> | /api/gps/quote    (FX quote service proxy)             |
-|                    |--> | /api/transactions (create payout intent / claim link)  |
-| - Quote & Flow UI  |--> | /api/verification (check on-chain verification status) |
-| - Recipient forms  |    +--------------------------------------------------------+
-| - Payment confirm  |                       |
-| - Funding page     |                       | fetches / updates
-+----------+---------+                       v
-           |                         +---------------+
-           | Self Protocol           |  PostgreSQL /  | (Prisma ORM)
-           | (Verification)          |   SQLite dev   |
-           v                         +-------+-------+
-  +----------------------+                   |
-  | Self Mobile App      |<------------------+
-  | (User scans QR)      |
-  +----------+-----------+
-             |
-             | on‑chain event (ProofOfHumanOApp, Celo Mainnet)
-             v
-       +-----------+          periodic polling          +------------------+
-       |  Relayer  |----------------------------------->| CentralWallet     |
-       | (apps/    |  ethers.js (Celo RPC & Sepolia)    | (Sepolia contract)|
-       |  relayer) |<-----------------------------------| (deposits, KYC)   |
-       +-----------+        writes verification flag    +------------------+
-```
+
+## Product Overview (Non‑Technical)
+GlobalX Money enables individuals and small businesses to send compliant, near‑instant international payouts with full transparency on FX rates, identity verification and settlement status. The experience is designed to feel like a modern consumer money app while meeting the guardrails regulators and banking partners expect.
+
+### Core Value Proposition
+| Stakeholder | Value |
+|-------------|-------|
+| Sender (User) | Fast quote, locked rate, clear fees, instant INR delivery. |
+| Recipient | Reliable bank payout, optional claim link flow. |
+| Compliance / Ops | Deterministic KYC gate (on‑chain verification), audit trail of quote + execution snapshot. |
+| Engineering | Modular architecture (frontend, relayer, contracts, data) for faster iteration. |
+
+### Why On‑Chain Verification?
+Traditional KYC duplicates checks across providers. By anchoring a verification outcome on-chain (Self Protocol) we:
+- Reduce repeated friction for returning users
+- Provide cryptographic auditability
+- Allow future interoperability with other regulated dApps
+
+### User Personas
+1. Solo Freelancer (exports digital services, wants predictable FX and fast payout to family / vendors in India).
+2. Startup Ops Manager (needs to fund recurring contractor payments with clear compliance status).
+3. Recipient (passive) – simply receives funds in bank; optionally views a claim link.
+4. Compliance Analyst – monitors verification & funding thresholds.
+
+### Typical User Journey
+1. Connect wallet → get quote (sees transparent FX + no hidden fees)
+2. Verify identity (one‑time) via Self app QR
+3. Fund settlement balance (approve + deposit PYUSD test token)
+4. Add or select recipient (bank details)
+5. Enter purpose & description (compliance metadata)
+6. Confirm & execute → payout intent stored, funds earmarked
+7. (Optional) Share claim link with recipient for acknowledgement
+
+### Differentiators
+- On‑chain portable verification (vs siloed KYC)
+- Live rate with clear delta vs mid‑market
+- Zero fee messaging and instant payout positioning (<10s target)
+- Claim URL pattern (future extensibility for recipient self‑service)
+
+## Non‑Technical Data Flow (Narrative)
+"You" connect a wallet, the app checks if you are verified. If not, you scan a QR in the Self mobile app which proves—without sharing full personal data again—that you meet age / geography rules. A lightweight relayer watches the public verification event and updates an allow‑list flag on the settlement contract on another chain. Once verified, you deposit a stable token into a shared settlement contract, and then you can initiate a payout by specifying who should receive funds and why. The system stores a snapshot of the FX rate you accepted so any later audits can reconstruct exactly what you saw.
+
+## Compliance & Risk (High Level)
+- Identity gating before funding or execution
+- Explicit purpose + description stored per transaction
+- Separation of quoting (read) vs state change (write) surfaces
+- Deterministic chain IDs & contract addresses reduce mis‑routing risk
+
+## Roadmap Themes (Business)
+- Coverage: More corridors & settlement assets
+- Trust: Proof-of-reserve style dashboard for contract balances
+- Ops: Automated anomaly alerts (failed relays, stale verification)
+- UX: Recipient self‑service portal & payout tracking
 
 ## Packages / Apps
 
@@ -44,6 +113,7 @@ A turbo-powered monorepo providing a Web3-enabled cross‑border payout experien
 |------|-------------|
 | `apps/client` | Next.js 15 (App Router) frontend: quote, KYC trigger, funding, payout flow. |
 | `apps/relayer` | Node/Express relayer syncing Self Protocol verification from Celo to Sepolia CentralWallet. |
+| `apps/contracts` | Solidity contracts: `CentralWallet` (Sepolia; deposits & KYC gate) and `ProofOfHumanOApp` (Celo; emits verification events). |
 | `prisma` (under client) | Prisma schema & migrations for recipients, transactions, verification records. |
 
 ## Key Functional Domains
@@ -141,9 +211,9 @@ Adjust commands to the actual scripts you define.
 ## Contract Interactions
 | Contract | Network | Purpose |
 |----------|---------|---------|
-| CentralWallet | Sepolia | Holds user deposits (PYUSD) & KYC gating. |
-| ProofOfHumanOApp | Celo Mainnet | Emits verification events for Self Protocol. |
-| PYUSD (test) | Sepolia | Settlement token for funding & payouts. |
+| [CentralWallet](https://sepolia.etherscan.io/address/0xbe04d187db8d3dc61aeb5ae3ff2711371d7e307c) | Sepolia | Holds user deposits (PYUSD) & KYC gating. |
+| [ProofOfHumanOApp](https://celoscan.io/address/0xbE04D187dB8D3DC61AEB5AE3FF2711371D7E307c) | Celo Mainnet | Emits verification events for Self Protocol. |
+| [PYUSD (test)](0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9) | Sepolia | Settlement token for funding & payouts. |
 
 ## Security Considerations
 - Never commit private keys (`RELAYER_PRIVATE_KEY`). Use environment secrets.
@@ -201,63 +271,6 @@ apps/
 ## License
 ISC (adjust if needed)
 
----
-Built with care for secure, instant cross‑border payouts.
-
----
-
-## Product Overview (Non‑Technical)
-GlobalX Money enables individuals and small businesses to send compliant, near‑instant international payouts with full transparency on FX rates, identity verification and settlement status. The experience is designed to feel like a modern consumer money app while meeting the guardrails regulators and banking partners expect.
-
-### Core Value Proposition
-| Stakeholder | Value |
-|-------------|-------|
-| Sender (User) | Fast quote, locked rate, clear fees, instant INR delivery. |
-| Recipient | Reliable bank payout, optional claim link flow. |
-| Compliance / Ops | Deterministic KYC gate (on‑chain verification), audit trail of quote + execution snapshot. |
-| Engineering | Modular architecture (frontend, relayer, contracts, data) for faster iteration. |
-
-### Why On‑Chain Verification?
-Traditional KYC duplicates checks across providers. By anchoring a verification outcome on-chain (Self Protocol) we:
-- Reduce repeated friction for returning users
-- Provide cryptographic auditability
-- Allow future interoperability with other regulated dApps
-
-### User Personas
-1. Solo Freelancer (exports digital services, wants predictable FX and fast payout to family / vendors in India).
-2. Startup Ops Manager (needs to fund recurring contractor payments with clear compliance status).
-3. Recipient (passive) – simply receives funds in bank; optionally views a claim link.
-4. Compliance Analyst – monitors verification & funding thresholds.
-
-### Typical User Journey
-1. Connect wallet → get quote (sees transparent FX + no hidden fees)
-2. Verify identity (one‑time) via Self app QR
-3. Fund settlement balance (approve + deposit PYUSD test token)
-4. Add or select recipient (bank details)
-5. Enter purpose & description (compliance metadata)
-6. Confirm & execute → payout intent stored, funds earmarked
-7. (Optional) Share claim link with recipient for acknowledgement
-
-### Differentiators
-- On‑chain portable verification (vs siloed KYC)
-- Live rate with clear delta vs mid‑market
-- Zero fee messaging and instant payout positioning (<10s target)
-- Claim URL pattern (future extensibility for recipient self‑service)
-
-## Non‑Technical Data Flow (Narrative)
-"You" connect a wallet, the app checks if you are verified. If not, you scan a QR in the Self mobile app which proves—without sharing full personal data again—that you meet age / geography rules. A lightweight relayer watches the public verification event and updates an allow‑list flag on the settlement contract on another chain. Once verified, you deposit a stable token into a shared settlement contract, and then you can initiate a payout by specifying who should receive funds and why. The system stores a snapshot of the FX rate you accepted so any later audits can reconstruct exactly what you saw.
-
-## Compliance & Risk (High Level)
-- Identity gating before funding or execution
-- Explicit purpose + description stored per transaction
-- Separation of quoting (read) vs state change (write) surfaces
-- Deterministic chain IDs & contract addresses reduce mis‑routing risk
-
-## Roadmap Themes (Business)
-- Coverage: More corridors & settlement assets
-- Trust: Proof-of-reserve style dashboard for contract balances
-- Ops: Automated anomaly alerts (failed relays, stale verification)
-- UX: Recipient self‑service portal & payout tracking
 
 ## Glossary
 | Term | Meaning |
@@ -287,5 +300,8 @@ No — only a verification proof/status, not raw identity attributes.
 
 ## Pitch (One Liner)
 Borderless payouts with instant compliance—verify once, move value globally in seconds.
+
+---
+Built with care for secure, instant cross‑border payouts.
 
 ---
